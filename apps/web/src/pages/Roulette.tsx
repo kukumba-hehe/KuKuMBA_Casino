@@ -38,7 +38,6 @@ export default function Roulette() {
 
   const bal = balances?.find((b) => b.mode === mode && b.currency === currency);
   const total = Object.values(bets).reduce((a, b) => a + b, 0);
-  const multOf = (type: string) => info?.bets?.find((b: any) => b.type === type)?.multiplier ?? 0;
 
   const add = (key: string) => setBets((p) => ({ ...p, [key]: (p[key] || 0) + chip }));
   const clear = () => setBets({});
@@ -100,8 +99,10 @@ export default function Roulette() {
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-6">
         {/* Wheel + result */}
-        <div className="card flex flex-col items-center gap-5 p-6 md:flex-row md:items-center md:justify-around">
-          <RouletteWheel result={result} spinId={spinId} />
+        <div className="card flex flex-col items-center gap-5 p-5 sm:p-6 md:flex-row md:items-center md:justify-around">
+          <div className="w-full max-w-[300px] shrink-0 sm:max-w-[320px]">
+            <RouletteWheel result={result} spinId={spinId} />
+          </div>
           <div className="text-center md:text-left">
             <h1 className="text-2xl font-extrabold">
               <span className="holo-text">{t('roulette.title')}</span>
@@ -157,22 +158,24 @@ export default function Roulette() {
             </div>
           </div>
 
-          {/* numbers */}
-          <div className="flex gap-1.5">
-            <Cell k="N:0" label="0" cls="bg-roul-green !aspect-auto w-12 self-stretch" />
-            <div className="grid flex-1 grid-cols-12 gap-1.5">
-              {[TOP, MID, BOT].map((row, ri) => (
-                <div key={ri} className="contents">
-                  {row.map((n) => (
-                    <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white`} />
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {['COLUMN_3', 'COLUMN_2', 'COLUMN_1'].map((c) => (
-                <Cell key={c} k={c} label="2:1" cls="bg-white/5 w-12 !aspect-auto flex-1" />
-              ))}
+          {/* numbers — horizontally scrollable on small screens so nothing overflows the page */}
+          <div className="-mx-1 overflow-x-auto px-1 pb-1">
+            <div className="flex min-w-[480px] gap-1.5">
+              <Cell k="N:0" label="0" cls="bg-roul-green !aspect-auto w-11 self-stretch" />
+              <div className="grid flex-1 grid-cols-12 gap-1.5">
+                {[TOP, MID, BOT].map((row, ri) => (
+                  <div key={ri} className="contents">
+                    {row.map((n) => (
+                      <Cell key={n} k={`N:${n}`} label={n} cls={`${cellColor(n)} text-white`} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {['COLUMN_3', 'COLUMN_2', 'COLUMN_1'].map((c) => (
+                  <Cell key={c} k={c} label="2:1" cls="bg-white/5 w-11 !aspect-auto flex-1" />
+                ))}
+              </div>
             </div>
           </div>
 
@@ -184,7 +187,7 @@ export default function Roulette() {
           </div>
 
           {/* even-money */}
-          <div className="grid grid-cols-6 gap-1.5">
+          <div className="grid grid-cols-3 gap-1.5 md:grid-cols-6">
             <Cell k="LOW" label="1–18" cls="bg-white/5" wide />
             <Cell k="EVEN" label={t('roulette.even')} cls="bg-white/5" wide />
             <Cell k="RED" label={t('roulette.red')} cls="bg-roul-red" wide />
