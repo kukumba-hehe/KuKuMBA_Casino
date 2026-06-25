@@ -1,25 +1,22 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
+import { Toaster } from './components/Toaster';
 import { reconnectSocket } from './lib/socket';
 import { useAuth } from './store/auth';
 
 import AdminPage from './pages/Admin';
 import AuthPage from './pages/Auth';
 import Bonuses from './pages/Bonuses';
-import Cashback from './pages/Cashback';
 import Lobby from './pages/Lobby';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
-import Promo from './pages/Promo';
 import RaffleDetail from './pages/RaffleDetail';
 import Raffles from './pages/Raffles';
 import Roulette from './pages/Roulette';
 import StaticPage from './pages/StaticPage';
 import Support from './pages/Support';
-import Vip from './pages/Vip';
 import Wallet from './pages/Wallet';
-import Referrals from './pages/Referrals';
 
 function RequireAuth({ children, admin }: { children: JSX.Element; admin?: boolean }) {
   const { accessToken, user } = useAuth();
@@ -29,36 +26,49 @@ function RequireAuth({ children, admin }: { children: JSX.Element; admin?: boole
   return children;
 }
 
+/** Reset scroll to the top on every navigation (fixes pages opening scrolled). */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   const accessToken = useAuth((s) => s.accessToken);
-  // refresh the socket auth whenever the session changes
   useEffect(() => {
     reconnectSocket();
   }, [accessToken]);
 
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<Lobby />} />
-        <Route path="/roulette" element={<Roulette />} />
-        <Route path="/raffles" element={<Raffles />} />
-        <Route path="/raffles/:id" element={<RaffleDetail />} />
-        <Route path="/bonuses" element={<Bonuses />} />
-        <Route path="/vip" element={<Vip />} />
-        <Route path="/support" element={<Support />} />
-        <Route path="/page/:key" element={<StaticPage />} />
+    <>
+      <ScrollToTop />
+      <Toaster />
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Lobby />} />
+          <Route path="/roulette" element={<Roulette />} />
+          <Route path="/raffles" element={<Raffles />} />
+          <Route path="/raffles/:id" element={<RaffleDetail />} />
+          {/* Bonuses hub holds cashback / promo / vip / referrals as tabs */}
+          <Route path="/bonuses" element={<Bonuses />} />
+          <Route path="/cashback" element={<Navigate to="/bonuses?tab=cashback" replace />} />
+          <Route path="/promo" element={<Navigate to="/bonuses?tab=promo" replace />} />
+          <Route path="/vip" element={<Navigate to="/bonuses?tab=vip" replace />} />
+          <Route path="/referrals" element={<Navigate to="/bonuses?tab=referrals" replace />} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/page/:key" element={<StaticPage />} />
 
-        <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
-        <Route path="/promo" element={<RequireAuth><Promo /></RequireAuth>} />
-        <Route path="/referrals" element={<RequireAuth><Referrals /></RequireAuth>} />
-        <Route path="/cashback" element={<RequireAuth><Cashback /></RequireAuth>} />
-        <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
-        <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
-        <Route path="/admin" element={<RequireAuth admin><AdminPage /></RequireAuth>} />
-      </Route>
-      <Route path="/login" element={<AuthPage mode="login" />} />
-      <Route path="/register" element={<AuthPage mode="register" />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+          <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
+          <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+          <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
+          <Route path="/admin" element={<RequireAuth admin><AdminPage /></RequireAuth>} />
+        </Route>
+        <Route path="/login" element={<AuthPage mode="login" />} />
+        <Route path="/register" element={<AuthPage mode="register" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

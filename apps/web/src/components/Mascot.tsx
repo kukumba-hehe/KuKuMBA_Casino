@@ -34,12 +34,12 @@ export function Mascot({ size = 40 }: { size?: number }) {
   );
 }
 
-export function Logo() {
+export function Logo({ size = 30 }: { size?: number }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <Mascot size={34} />
-      <span className="font-display text-xl font-extrabold tracking-tight">
-        <span className="holo-text">KuKuMBA</span>
+    <div className="flex shrink-0 items-center gap-2">
+      <Mascot size={size} />
+      <span className="holo-text whitespace-nowrap font-display text-lg font-extrabold tracking-tight sm:text-xl">
+        KuKuMBA
       </span>
     </div>
   );
