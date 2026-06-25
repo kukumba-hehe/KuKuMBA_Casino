@@ -211,8 +211,8 @@ export class RafflesService {
     for (const userId of picked) {
       await this.notifications.notify(userId, {
         type: 'RAFFLE',
-        titleRu: 'Вы выиграли в розыгрыше! 🎉',
-        titleEn: 'You won a raffle! 🎉',
+        titleRu: 'Вы выиграли в розыгрыше!',
+        titleEn: 'You won a raffle!',
         bodyRu: `Поздравляем! Приз ${prizeEach.toFixed()} ${raffle.currency} зачислен.`,
         bodyEn: `Congrats! ${prizeEach.toFixed()} ${raffle.currency} has been credited.`,
       });

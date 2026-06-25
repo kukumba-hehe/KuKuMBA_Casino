@@ -143,6 +143,11 @@ export class AdminController {
     return this.admin.deleteChatMessage(adminId, id);
   }
 
+  @Post('broadcast')
+  broadcast(@CurrentUser('id') adminId: string, @Body() body: any) {
+    return this.admin.broadcast(adminId, body);
+  }
+
   @Get('audit')
   audit(@Query('take') take?: string) {
     return this.admin.auditLog(take ? +take : 100);

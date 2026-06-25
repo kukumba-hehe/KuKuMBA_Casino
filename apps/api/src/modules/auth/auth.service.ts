@@ -81,8 +81,8 @@ export class AuthService {
 
     await this.notifications.notify(user.id, {
       type: 'SYSTEM',
-      titleRu: 'Добро пожаловать в KuKuMBA! 🦄',
-      titleEn: 'Welcome to KuKuMBA! 🦄',
+      titleRu: 'Добро пожаловать в KuKuMBA!',
+      titleEn: 'Welcome to KuKuMBA!',
       bodyRu: `Ваш ID аккаунта: ${user.accountId}. Мы начислили вам ${demoBonus} демо-монет — крутите рулетку!`,
       bodyEn: `Your account ID is ${user.accountId}. We credited ${demoBonus} demo coins — spin the wheel!`,
     });
