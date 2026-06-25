@@ -6,6 +6,7 @@ import { D } from '../../common/utils/money';
 import { SettingsService } from '../../config/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentsService } from '../payments/payments.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { WalletService } from '../wallet/wallet.service';
 
 /**
@@ -20,6 +21,7 @@ export class AdminService {
     private payments: PaymentsService,
     private settings: SettingsService,
     private notifications: NotificationsService,
+    private realtime: RealtimeService,
   ) {}
 
   private audit(actorId: string, action: string, targetType?: string, targetId?: string, meta?: any) {
@@ -42,7 +44,7 @@ export class AdminService {
     return { users, pendingDeposits, pendingWithdrawals, openRaffles, openTickets, rounds, kycPending };
   }
 
-  // ── Users ────────────────────────────────────────────────────────────────
+  // ── Users ────────────────────────────────────────────────────────────
   async listUsers(q?: string, skip = 0, take = 25) {
     const where: Prisma.UserWhereInput = q
       ? {
@@ -135,8 +137,8 @@ export class AdminService {
     await this.audit(adminId, 'kyc.review', 'user', userId, { approve, note });
     await this.notifications.notify(userId, {
       type: 'KYC',
-      titleRu: approve ? 'KYC подтверждён ✅' : 'KYC отклонён',
-      titleEn: approve ? 'KYC approved ✅' : 'KYC rejected',
+      titleRu: approve ? 'KYC подтверждён' : 'KYC отклонён',
+      titleEn: approve ? 'KYC approved' : 'KYC rejected',
       bodyRu: approve ? 'Верификация пройдена.' : `Причина: ${note || '—'}`,
       bodyEn: approve ? 'Your identity is verified.' : `Reason: ${note || '—'}`,
     });
@@ -152,7 +154,7 @@ export class AdminService {
     return { ok: true };
   }
 
-  // ── Payments ───────────────────────────────────────────────────────────────
+  // ── Payments ────────────────────────────────────────────────────────
   listDeposits(status?: string) {
     return this.prisma.deposit.findMany({
       where: status ? { status: status as any } : {},
@@ -189,7 +191,7 @@ export class AdminService {
     return res;
   }
 
-  // ── Promo codes ──────────────────────────────────────────────────────────
+  // ── Promo codes ────────────────────────────────────────────────
   listPromocodes() {
     return this.prisma.promoCode.findMany({ orderBy: { createdAt: 'desc' }, take: 200 });
   }
@@ -225,7 +227,7 @@ export class AdminService {
     return promo;
   }
 
-  // ── Bonuses ────────────────────────────────────────────────────────────────
+  // ── Bonuses ──────────────────────────────────────────────────────────
   listBonuses() {
     return this.prisma.bonus.findMany({ orderBy: { createdAt: 'asc' } });
   }
@@ -253,7 +255,7 @@ export class AdminService {
     return bonus;
   }
 
-  // ── Currencies ───────────────────────────────────────────────────────────
+  // ── Currencies ────────────────────────────────────────────────
   listCurrencies() {
     return this.prisma.currency.findMany({ orderBy: { sortOrder: 'asc' } });
   }
@@ -280,7 +282,7 @@ export class AdminService {
     return cur;
   }
 
-  // ── Settings ─────────────────────────────────────────────────────────────
+  // ── Settings ────────────────────────────────────────────────────
   listSettings() {
     return this.settings.all();
   }
@@ -291,7 +293,7 @@ export class AdminService {
     return res;
   }
 
-  // ── Content ────────────────────────────────────────────────────────────────
+  // ── Content ──────────────────────────────────────────────────────────
   listContent() {
     return this.prisma.contentPage.findMany({ orderBy: [{ key: 'asc' }, { locale: 'asc' }] });
   }
@@ -306,7 +308,7 @@ export class AdminService {
     return page;
   }
 
-  // ── Misc ─────────────────────────────────────────────────────────────────
+  // ── Misc ────────────────────────────────────────────────────────────
   listTickets(status?: string) {
     return this.prisma.supportTicket.findMany({
       where: status ? { status: status as any } : {},
@@ -320,6 +322,35 @@ export class AdminService {
     await this.prisma.chatMessage.update({ where: { id }, data: { deleted: true } });
     await this.audit(adminId, 'chat.delete', 'chat', id);
     return { ok: true };
+  }
+
+  /**
+   * Fan a single announcement out to every (optionally KYC-verified) user. We
+   * persist with createMany for efficiency, then emit one global socket event so
+   * connected clients refresh their bell without a per-user push storm.
+   */
+  async broadcast(
+    adminId: string,
+    dto: { titleRu: string; titleEn: string; bodyRu: string; bodyEn: string; onlyVerified?: boolean },
+  ) {
+    if (!dto.titleRu || !dto.titleEn) throw new BadRequestException('TITLE_REQUIRED');
+    const where: Prisma.UserWhereInput = dto.onlyVerified ? { kycStatus: 'VERIFIED' } : {};
+    const users = await this.prisma.user.findMany({ where, select: { id: true } });
+    if (users.length > 0) {
+      await this.prisma.notification.createMany({
+        data: users.map((u) => ({
+          userId: u.id,
+          type: 'SYSTEM' as const,
+          titleRu: dto.titleRu,
+          titleEn: dto.titleEn,
+          bodyRu: dto.bodyRu ?? '',
+          bodyEn: dto.bodyEn ?? '',
+        })),
+      });
+      this.realtime.emit('notification', { broadcast: true });
+    }
+    await this.audit(adminId, 'broadcast', 'notification', undefined, { count: users.length });
+    return { count: users.length };
   }
 
   auditLog(take = 100) {

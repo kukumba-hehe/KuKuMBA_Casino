@@ -6,11 +6,11 @@ import { genServerSeed, hashServerSeed } from '../src/modules/provably-fair/prov
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱  Seeding KuKuMBA…');
+  console.log('Seeding KuKuMBA…');
 
-  // ── Currencies (demo + fiat + crypto, USDT multi-network) ────────────────
+  // ── Currencies (demo + fiat + crypto, USDT multi-network) ────────────
   const currencies = [
-    { code: 'DEMO', name: 'Demo Coins', type: 'DEMO', symbol: '🦄', decimals: 2, networks: [], usdRate: 0.1, sortOrder: 0 },
+    { code: 'DEMO', name: 'Demo Coins', type: 'DEMO', symbol: 'KMB', decimals: 2, networks: [], usdRate: 0.1, sortOrder: 0 },
     { code: 'USD', name: 'US Dollar', type: 'FIAT', symbol: '$', decimals: 2, networks: [], usdRate: 1, sortOrder: 1 },
     { code: 'EUR', name: 'Euro', type: 'FIAT', symbol: '€', decimals: 2, networks: [], usdRate: 1.08, sortOrder: 2 },
     { code: 'RUB', name: 'Russian Ruble', type: 'FIAT', symbol: '₽', decimals: 2, networks: [], usdRate: 0.011, sortOrder: 3 },
@@ -31,7 +31,7 @@ async function main() {
     });
   }
 
-  // ── The game ──────────────────────────────────────────────────────────────
+  // ── The game ──────────────────────────────────────────────────────────
   await prisma.game.upsert({
     where: { key: 'roulette' },
     create: {
@@ -49,7 +49,7 @@ async function main() {
     update: { rtp: 0.99 },
   });
 
-  // ── VIP ladder ──────────────────────────────────────────────────────────────
+  // ── VIP ladder ────────────────────────────────────────────────────────
   const vip = [
     { level: 0, name: 'Foal', xpRequired: 0, cashbackPercent: 0, rakebackPercent: 0, weeklyBonus: 0, color: '#9AA4C7', perksRu: 'Старт пути', perksEn: 'Start of the journey' },
     { level: 1, name: 'Pony', xpRequired: 100, cashbackPercent: 1, rakebackPercent: 0.5, weeklyBonus: 1, color: '#7CC4FF', perksRu: 'Кешбэк 1%', perksEn: '1% cashback' },
@@ -64,10 +64,10 @@ async function main() {
     await prisma.vipLevel.upsert({ where: { level: v.level }, create: v as any, update: v as any });
   }
 
-  // ── Account ID counter ──────────────────────────────────────────────────────
+  // ── Account ID counter ────────────────────────────────────────────
   await prisma.counter.upsert({ where: { key: 'account' }, create: { key: 'account', value: 100000 }, update: {} });
 
-  // ── Users: admin + two demo players ──────────────────────────────────────────
+  // ── Users: admin only (no seeded test players) ──────────────────────
   async function ensureUser(opts: {
     email: string; username: string; password: string; role?: any; accountId: number; demo?: number;
   }) {
@@ -110,11 +110,9 @@ async function main() {
     update: {},
   });
 
-  const p1 = await ensureUser({ email: 'pinkie@kukumba.local', username: 'PinkiePie', password: 'player123', accountId: 100001, demo: 5000 });
-  const p2 = await ensureUser({ email: 'twilight@kukumba.local', username: 'TwilightSpark', password: 'player123', accountId: 100002, demo: 5000 });
-  await prisma.counter.update({ where: { key: 'account' }, data: { value: 100002 } });
+  // The account counter stays at 100000 (admin's id); the next real sign-up gets 100001.
 
-  // ── Bonuses ──────────────────────────────────────────────────────────────────
+  // ── Bonuses ──────────────────────────────────────────────────────────
   const bonuses = [
     { key: 'welcome', name: 'Welcome Bonus', type: 'WELCOME', currency: 'DEMO', amount: 1000, wagerMultiplier: 1, descriptionRu: 'Приветственный бонус 1000 демо-монет.', descriptionEn: '1000 demo coins welcome bonus.' },
     { key: 'nodep', name: 'No-Deposit Spark', type: 'NO_DEPOSIT', currency: 'DEMO', amount: 500, wagerMultiplier: 2, descriptionRu: 'Бездепозитный бонус 500 демо-монет.', descriptionEn: '500 demo coins, no deposit needed.' },
@@ -124,7 +122,7 @@ async function main() {
     await prisma.bonus.upsert({ where: { key: b.key }, create: b as any, update: b as any });
   }
 
-  // ── Promo codes ──────────────────────────────────────────────────────────────
+  // ── Promo codes ─────────────────────────────────────────────────
   const promos = [
     { code: 'KUKUMBA', type: 'BALANCE', currency: 'DEMO', amount: 1000, mode: 'DEMO', perUserLimit: 1 },
     { code: 'WELCOME50', type: 'BALANCE', currency: 'DEMO', amount: 500, mode: 'DEMO', perUserLimit: 1 },
@@ -134,7 +132,7 @@ async function main() {
     await prisma.promoCode.upsert({ where: { code: p.code }, create: p as any, update: {} });
   }
 
-  // ── App settings ─────────────────────────────────────────────────────────────
+  // ── App settings ───────────────────────────────────────────────
   const settings: Record<string, any> = {
     'platform.name': 'KuKuMBA',
     'game.rtp': 0.99,
@@ -146,12 +144,12 @@ async function main() {
     await prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
   }
 
-  // ── Content pages (RU + EN) ──────────────────────────────────────────────────
+  // ── Content pages (RU + EN) ───────────────────────────────────────
   const pages: Array<{ key: string; ru: { t: string; b: string }; en: { t: string; b: string } }> = [
     {
       key: 'about',
-      ru: { t: 'О KuKuMBA', b: 'KuKuMBA — няшное, но серьёзное казино с одной честной игрой: рулеткой с RTP 99%. Мы верим в прозрачность (provably-fair), заботу об игроках и магию единорогов. 🦄' },
-      en: { t: 'About KuKuMBA', b: 'KuKuMBA is a cute-yet-serious casino with one fair game: 99% RTP roulette. We believe in transparency (provably-fair), player care, and unicorn magic. 🦄' },
+      ru: { t: 'О KuKuMBA', b: 'KuKuMBA — няшное, но серьёзное казино с одной честной игрой: рулеткой с RTP 99%. Мы верим в прозрачность (provably-fair), заботу об игроках и магию единорогов.' },
+      en: { t: 'About KuKuMBA', b: 'KuKuMBA is a cute-yet-serious casino with one fair game: 99% RTP roulette. We believe in transparency (provably-fair), player care, and unicorn magic.' },
     },
     {
       key: 'responsible-gaming',
@@ -184,11 +182,11 @@ async function main() {
     await prisma.contentPage.upsert({ where: { key_locale: { key: p.key, locale: 'en' } }, create: { key: p.key, locale: 'en', title: p.en.t, body: p.en.b }, update: { title: p.en.t, body: p.en.b } });
   }
 
-  // ── Demo raffle with participants ────────────────────────────────────────────
+  // ── Demo raffle (starts empty; real players join from the UI) ─────────────
   const existingRaffle = await prisma.raffle.findFirst({ where: { title: 'KuKuMBA Mega Giveaway' } });
   if (!existingRaffle) {
     const serverSeed = genServerSeed();
-    const raffle = await prisma.raffle.create({
+    await prisma.raffle.create({
       data: {
         title: 'KuKuMBA Mega Giveaway',
         descriptionRu: 'Большой розыгрыш от администрации: 10 000 демо-монет на троих победителей!',
@@ -207,17 +205,10 @@ async function main() {
         serverSeedHash: hashServerSeed(serverSeed),
       },
     });
-    await prisma.raffleEntry.createMany({
-      data: [
-        { raffleId: raffle.id, userId: p1.id, tickets: 1 },
-        { raffleId: raffle.id, userId: p2.id, tickets: 1 },
-      ],
-    });
   }
 
-  console.log('✅  Seed complete.');
+  console.log('Seed complete.');
   console.log(`   Admin: ${process.env.ADMIN_EMAIL || 'admin@kukumba.local'} / ${process.env.ADMIN_PASSWORD || 'admin12345'}`);
-  console.log('   Players: PinkiePie / player123, TwilightSpark / player123');
 }
 
 main()
