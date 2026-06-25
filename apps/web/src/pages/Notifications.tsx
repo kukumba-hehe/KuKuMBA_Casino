@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, CheckCheck } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
@@ -36,8 +37,12 @@ export default function Notifications() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold">🔔 {t('nav.notifications')}</h1>
-        <button onClick={readAll} className="btn-ghost text-sm">Прочитать всё</button>
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+          <Bell size={24} className="text-sun" /> {t('nav.notifications')}
+        </h1>
+        <button onClick={readAll} className="btn-ghost inline-flex items-center gap-1.5 text-sm">
+          <CheckCheck size={16} /> {t('common.readAll')}
+        </button>
       </div>
       <div className="space-y-2">
         {(data ?? []).map((n: any) => (

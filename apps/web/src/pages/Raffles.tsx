@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { PartyPopper } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
@@ -11,7 +12,9 @@ export default function Raffles() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold">🎉 {t('raffles.title')}</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+        <PartyPopper size={24} className="text-bubble" /> {t('raffles.title')}
+      </h1>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {(data ?? []).map((r: any) => (
           <Link key={r.id} to={`/raffles/${r.id}`} className="card flex flex-col p-5 transition hover:shadow-glow">

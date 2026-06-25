@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { LifeBuoy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
 import { ChatBox } from '../components/ChatBox';
 import { useAuth } from '../store/auth';
+import { toast } from '../store/toast';
 
 export default function Support() {
   const { t, i18n } = useTranslation();
@@ -15,26 +17,26 @@ export default function Support() {
 
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [msg, setMsg] = useState('');
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMsg('');
     try {
       await api.post('/support/tickets', { subject, message });
       setSubject('');
       setMessage('');
-      setMsg('✅ Тикет создан / Ticket created');
+      toast.success(t('support.ticketCreated'));
       qc.invalidateQueries({ queryKey: ['tickets'] });
     } catch (e) {
-      setMsg('⚠ ' + apiError(e));
+      toast.error(apiError(e));
     }
   };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="space-y-6">
-        <h1 className="text-2xl font-extrabold">🛟 {t('support.title')}</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+          <LifeBuoy size={24} className="text-sky" /> {t('support.title')}
+        </h1>
 
         <div className="card p-5">
           <h2 className="mb-3 text-lg font-bold">{t('support.faq')}</h2>
@@ -55,7 +57,6 @@ export default function Support() {
               <input className="input" placeholder={t('support.subject')} value={subject} onChange={(e) => setSubject(e.target.value)} required />
               <textarea className="input min-h-28" placeholder={t('support.message')} value={message} onChange={(e) => setMessage(e.target.value)} required />
               <button className="btn-primary">{t('common.submit')}</button>
-              {msg && <div className="text-sm">{msg}</div>}
             </form>
           </div>
         )}

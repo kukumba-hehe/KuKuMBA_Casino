@@ -1,4 +1,6 @@
+import { MessageCircle, Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../store/auth';
@@ -11,6 +13,7 @@ interface Msg {
 }
 
 export function ChatBox({ className = '' }: { className?: string }) {
+  const { t } = useTranslation();
   const authed = !!useAuth((s) => s.accessToken);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState('');
@@ -44,7 +47,9 @@ export function ChatBox({ className = '' }: { className?: string }) {
 
   return (
     <div className={`card flex flex-col ${className}`}>
-      <div className="border-b border-white/10 px-4 py-3 text-sm font-bold">💬 Чат · Chat</div>
+      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-bold">
+        <MessageCircle size={16} className="text-lav" /> {t('chat.title')}
+      </div>
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3" style={{ maxHeight: 360 }}>
         {messages.map((m) => (
           <div key={m.id} className="text-sm">
@@ -60,14 +65,16 @@ export function ChatBox({ className = '' }: { className?: string }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={500}
-            placeholder="Сообщение…"
+            placeholder={t('chat.placeholder')}
             className="input !py-2"
           />
-          <button className="btn-primary !px-3 !py-2">➤</button>
+          <button className="btn-primary grid !px-3 !py-2 place-items-center" aria-label={t('common.submit')}>
+            <Send size={16} />
+          </button>
         </form>
       ) : (
         <div className="border-t border-white/10 p-3 text-center text-xs text-white/40">
-          Войдите, чтобы писать в чат
+          {t('chat.signIn')}
         </div>
       )}
     </div>

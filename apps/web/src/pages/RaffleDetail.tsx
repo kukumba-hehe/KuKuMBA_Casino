@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Dices, ShieldCheck, Trophy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import api, { apiError } from '../lib/api';
 import { fmt } from '../lib/hooks';
 import { useAuth } from '../store/auth';
+import { toast } from '../store/toast';
 
 export default function RaffleDetail() {
   const { id } = useParams();
@@ -13,18 +14,16 @@ export default function RaffleDetail() {
   const qc = useQueryClient();
   const authed = !!useAuth((s) => s.accessToken);
   const isAdmin = useAuth((s) => s.user?.role) === 'ADMIN';
-  const [msg, setMsg] = useState('');
 
   const { data: r } = useQuery({ queryKey: ['raffle', id], queryFn: async () => (await api.get(`/raffles/${id}`)).data });
 
   const join = async () => {
-    setMsg('');
     try {
       await api.post(`/raffles/${id}/join`);
-      setMsg('✅ Вы участвуете! / You joined!');
+      toast.success(t('raffles.joined'));
       qc.invalidateQueries({ queryKey: ['raffle', id] });
     } catch (e) {
-      setMsg('⚠ ' + apiError(e));
+      toast.error(apiError(e));
     }
   };
   const draw = async () => {
@@ -32,7 +31,7 @@ export default function RaffleDetail() {
       await api.post(`/raffles/${id}/draw`, {});
       qc.invalidateQueries({ queryKey: ['raffle', id] });
     } catch (e) {
-      setMsg('⚠ ' + apiError(e));
+      toast.error(apiError(e));
     }
   };
 
@@ -58,14 +57,17 @@ export default function RaffleDetail() {
           <button onClick={join} className="btn-primary w-full">{t('raffles.join')}</button>
         )}
         {r.status === 'OPEN' && isAdmin && (
-          <button onClick={draw} className="btn-soft w-full">🎲 Провести розыгрыш (admin)</button>
+          <button onClick={draw} className="btn-soft inline-flex w-full items-center justify-center gap-2">
+            <Dices size={18} /> {t('raffles.drawAdmin')}
+          </button>
         )}
-        {msg && <div className="text-center text-sm">{msg}</div>}
       </div>
 
       {r.winners && r.winners.length > 0 && (
         <div className="card p-6">
-          <h2 className="mb-3 text-lg font-bold">🏆 Победители / Winners</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-bold">
+            <Trophy size={20} className="text-sun" /> {t('raffles.winnersTitle')}
+          </h2>
           <div className="space-y-2">
             {r.winners.map((w: any, i: number) => (
               <div key={i} className="flex items-center justify-between rounded-xl bg-holo-soft px-4 py-3">
@@ -78,7 +80,9 @@ export default function RaffleDetail() {
       )}
 
       <div className="card p-6 text-xs text-white/50">
-        <div className="mb-2 font-semibold text-white/70">🔐 Provably-fair</div>
+        <div className="mb-2 flex items-center gap-1.5 font-semibold text-white/70">
+          <ShieldCheck size={15} className="text-mint" /> {t('raffles.provablyFair')}
+        </div>
         <div className="break-all">serverSeedHash: <span className="font-mono">{r.serverSeedHash}</span></div>
         {r.serverSeed && <div className="break-all">serverSeed: <span className="font-mono">{r.serverSeed}</span></div>}
         {r.clientSeed && <div className="break-all">clientSeed: <span className="font-mono">{r.clientSeed}</span></div>}
