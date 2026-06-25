@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { Copy, Check, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 import { fmt } from '../lib/hooks';
 
-export default function Referrals() {
+export default function Referrals({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const { data } = useQuery({ queryKey: ['referrals'], queryFn: async () => (await api.get('/referrals/me')).data });
   const [copied, setCopied] = useState(false);
@@ -18,18 +19,23 @@ export default function Referrals() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold">🤝 {t('nav.referrals')}</h1>
+      {!embedded && (
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+          <Users size={24} className="text-sky" /> {t('nav.referrals')}
+        </h1>
+      )}
 
       <div className="card space-y-4 p-6">
         <div>
           <label className="label">Ваш реферальный код / Your code</label>
-          <div className="text-3xl font-extrabold holo-text">{data?.code ?? '…'}</div>
+          <div className="holo-text text-3xl font-extrabold">{data?.code ?? '…'}</div>
         </div>
         <div>
           <label className="label">Ссылка / Link</label>
           <div className="flex gap-2">
             <input readOnly className="input font-mono text-sm" value={link} />
-            <button onClick={copy} className="btn-soft whitespace-nowrap">
+            <button onClick={copy} className="btn-soft flex items-center gap-2 whitespace-nowrap">
+              {copied ? <Check size={16} /> : <Copy size={16} />}
               {copied ? t('common.copied') : t('common.copy')}
             </button>
           </div>

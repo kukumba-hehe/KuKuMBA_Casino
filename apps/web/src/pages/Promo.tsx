@@ -1,43 +1,43 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Tag } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
+import { toast } from '../store/toast';
 
-export default function Promo() {
+export default function Promo({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [code, setCode] = useState('');
-  const [msg, setMsg] = useState('');
-  const [err, setErr] = useState('');
   const { data: mine } = useQuery({ queryKey: ['promo-me'], queryFn: async () => (await api.get('/promocodes/me')).data });
 
   const redeem = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMsg('');
-    setErr('');
     try {
       const { data } = await api.post('/promocodes/redeem', { code });
-      setMsg(`✅ ${data.type} ${data.amount ? `+${data.amount} ${data.currency}` : ''}`);
+      toast.success(`${data.type}${data.amount && Number(data.amount) ? ` · +${data.amount} ${data.currency}` : ''}`);
       setCode('');
       qc.invalidateQueries({ queryKey: ['balances'] });
       qc.invalidateQueries({ queryKey: ['promo-me'] });
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
     }
   };
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-2xl font-extrabold">🏷 {t('nav.promo')}</h1>
+      {!embedded && (
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+          <Tag size={24} className="text-sun" /> {t('nav.promo')}
+        </h1>
+      )}
       <form onSubmit={redeem} className="card space-y-3 p-6">
         <label className="label">Введите промокод / Enter a promo code</label>
         <div className="flex gap-2">
           <input className="input uppercase" value={code} onChange={(e) => setCode(e.target.value)} placeholder="KUKUMBA" />
           <button className="btn-primary">{t('common.claim')}</button>
         </div>
-        {msg && <div className="text-sm text-mint">{msg}</div>}
-        {err && <div className="text-sm text-roul-red">{err}</div>}
-        <p className="text-xs text-white/40">Попробуйте: KUKUMBA, WELCOME50, VIPBOOST</p>
+        <p className="text-xs text-white/40">Промокоды выдаются администрацией и в акциях.</p>
       </form>
 
       <div className="card p-5">

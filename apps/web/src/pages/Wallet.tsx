@@ -1,8 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowDownToLine, ArrowUpFromLine, Gem, WalletMinimal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Mascot } from '../components/Mascot';
 import api, { apiError } from '../lib/api';
 import { fmt, useBalances, useCurrencies } from '../lib/hooks';
+import { toast } from '../store/toast';
 
 export default function Wallet() {
   const { t } = useTranslation();
@@ -13,7 +16,9 @@ export default function Wallet() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold">💼 {t('wallet.title')}</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+        <WalletMinimal size={24} className="text-mint" /> {t('wallet.title')}
+      </h1>
 
       {/* balances */}
       <div className="card p-5">
@@ -27,7 +32,7 @@ export default function Wallet() {
                   {fmt(b.amount, 6)} <span className="text-white/50">{b.currency}</span>
                 </div>
               </div>
-              <span className="text-2xl">{b.mode === 'DEMO' ? '🦄' : '💎'}</span>
+              {b.mode === 'DEMO' ? <Mascot size={30} /> : <Gem size={26} className="text-sky" />}
             </div>
           ))}
           {(!balances || balances.length === 0) && <div className="text-white/40">{t('common.loading')}</div>}
@@ -80,7 +85,9 @@ function DepositCard({ currencies, onDone }: { currencies: any[]; onDone: () => 
 
   return (
     <div className="card space-y-3 p-5">
-      <h2 className="text-lg font-bold">⬇ {t('wallet.newDeposit')}</h2>
+      <h2 className="flex items-center gap-2 text-lg font-bold">
+        <ArrowDownToLine size={18} className="text-mint" /> {t('wallet.newDeposit')}
+      </h2>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">{t('common.currency')}</label>
@@ -111,9 +118,7 @@ function DepositCard({ currencies, onDone }: { currencies: any[]; onDone: () => 
         <div className="space-y-2 rounded-2xl bg-black/30 p-4">
           <div className="text-xs text-white/40">{t('wallet.depositAddr')} ({deposit.network || deposit.currency})</div>
           <div className="break-all rounded-lg bg-black/40 p-2 font-mono text-sm">{deposit.address}</div>
-          <div className="text-xs text-white/40">
-            Песочница: реальные деньги не двигаются. Нажмите, чтобы сымитировать поступление.
-          </div>
+          <div className="text-xs text-white/40">{t('wallet.sandboxHint')}</div>
           <button onClick={confirm} className="btn-soft w-full">{t('wallet.confirmSandbox')}</button>
         </div>
       )}
@@ -128,13 +133,9 @@ function WithdrawCard({ currencies, onDone }: { currencies: any[]; onDone: () =>
   const [network, setNetwork] = useState('TRC20');
   const [amount, setAmount] = useState('10');
   const [address, setAddress] = useState('');
-  const [msg, setMsg] = useState('');
-  const [err, setErr] = useState('');
   const cur = currencies.find((c) => c.code === currency);
 
   const submit = async () => {
-    setErr('');
-    setMsg('');
     try {
       await api.post('/payments/withdrawals', {
         currency,
@@ -142,16 +143,19 @@ function WithdrawCard({ currencies, onDone }: { currencies: any[]; onDone: () =>
         amount,
         address,
       });
-      setMsg('Заявка создана и ожидает проверки. / Request created, pending review.');
+      toast.success(t('wallet.withdrawCreated'));
+      setAddress('');
       onDone();
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
     }
   };
 
   return (
     <div className="card space-y-3 p-5">
-      <h2 className="text-lg font-bold">⬆ {t('wallet.requestWithdraw')}</h2>
+      <h2 className="flex items-center gap-2 text-lg font-bold">
+        <ArrowUpFromLine size={18} className="text-sun" /> {t('wallet.requestWithdraw')}
+      </h2>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">{t('common.currency')}</label>
@@ -181,8 +185,6 @@ function WithdrawCard({ currencies, onDone }: { currencies: any[]; onDone: () =>
         <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="0x… / T…" />
       </div>
       <button onClick={submit} className="btn-ghost w-full" disabled={!address}>{t('common.withdraw')}</button>
-      {msg && <div className="text-sm text-mint">{msg}</div>}
-      {err && <div className="text-sm text-roul-red">{err}</div>}
     </div>
   );
 }

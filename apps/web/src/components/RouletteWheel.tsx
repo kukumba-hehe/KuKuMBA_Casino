@@ -1,4 +1,9 @@
+import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Mascot } from './Mascot';
+
+// Keep in sync with the CSS transition below; the page reveals the result after this.
+export const SPIN_MS = 4500;
 
 // Real European wheel order (visual only — fairness comes from the RNG, not the layout).
 const EURO = [
@@ -39,6 +44,7 @@ export function RouletteWheel({
   const rText = (rO + rI) / 2;
 
   const [rot, setRot] = useState(0);
+  const [landed, setLanded] = useState(true);
   const rotRef = useRef(0);
 
   useEffect(() => {
@@ -50,12 +56,17 @@ export function RouletteWheel({
     const delta = ((want - mod) % 360 + 360) % 360;
     const next = current + 360 * 6 + delta; // 6 full turns then settle
     rotRef.current = next;
+    setLanded(false);
     setRot(next);
+    // fallback in case transitionend doesn't fire (reduced motion etc.)
+    const tm = setTimeout(() => setLanded(true), SPIN_MS + 120);
+    return () => clearTimeout(tm);
   }, [spinId, result]);
+
+  const showNumber = result != null && landed;
 
   return (
     <div className="relative mx-auto aspect-square w-full" style={{ maxWidth: size }}>
-      {/* pointer */}
       <div className="absolute left-1/2 top-[-2px] z-20 -translate-x-1/2">
         <div className="h-0 w-0 border-x-8 border-t-[14px] border-x-transparent border-t-sun drop-shadow" />
       </div>
@@ -63,10 +74,10 @@ export function RouletteWheel({
         width="100%"
         height="100%"
         viewBox={`0 0 ${size} ${size}`}
-        style={{
-          transform: `rotate(${rot}deg)`,
-          transition: 'transform 4.5s cubic-bezier(0.16, 1, 0.3, 1)',
+        onTransitionEnd={(e) => {
+          if ((e as any).propertyName === 'transform') setLanded(true);
         }}
+        style={{ transform: `rotate(${rot}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.16, 1, 0.3, 1)` }}
       >
         <circle cx={cx} cy={cy} r={rO + 3} fill="#0B0817" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
         {EURO.map((n, i) => {
@@ -93,18 +104,19 @@ export function RouletteWheel({
         })}
         <circle cx={cx} cy={cy} r={rI} fill="#14102A" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
       </svg>
-      {/* hub */}
       <div className="absolute inset-0 z-10 grid place-items-center">
         <div className="grid h-24 w-24 place-items-center rounded-full bg-holo-soft text-center shadow-glow">
-          {result == null ? (
-            <span className="text-4xl">🦄</span>
-          ) : (
+          {showNumber ? (
             <div>
               <div className="text-3xl font-extrabold tabular-nums">{result}</div>
               <div className="text-[10px] uppercase tracking-widest text-white/50">
                 {result === 0 ? 'zero' : RED.has(result) ? 'red' : 'black'}
               </div>
             </div>
+          ) : result != null ? (
+            <Loader2 size={32} className="animate-spin text-white/70" />
+          ) : (
+            <Mascot size={44} />
           )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { ArrowRight, Gift, PartyPopper, ShieldCheck, Target, TrendingUp, Trophy, Zap, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -24,17 +25,19 @@ export default function Lobby() {
         <div className="pointer-events-none absolute -right-10 -top-10 h-64 w-64 rounded-full bg-lav/20 blur-3xl" />
         <div className="relative grid items-center gap-8 md:grid-cols-2">
           <div>
-            <span className="chip mb-4">🦄 Provably-fair · RTP 99%</span>
+            <span className="chip mb-4 inline-flex items-center gap-1.5">
+              <ShieldCheck size={14} className="text-mint" /> Provably-fair · RTP 99%
+            </span>
             <h1 className="text-4xl font-extrabold leading-tight md:text-5xl">
               <span className="holo-text">{t('lobby.heroTitle')}</span>
             </h1>
             <p className="mt-4 max-w-md text-white/60">{t('lobby.heroSub')}</p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link to="/roulette" className="btn-primary text-lg">
-                🎯 {t('lobby.playNow')}
+              <Link to="/roulette" className="btn-primary inline-flex items-center gap-2 text-lg">
+                <Target size={20} /> {t('lobby.playNow')}
               </Link>
-              <Link to="/bonuses" className="btn-ghost text-lg">
-                🎁 {t('nav.bonuses')}
+              <Link to="/bonuses" className="btn-ghost inline-flex items-center gap-2 text-lg">
+                <Gift size={20} /> {t('nav.bonuses')}
               </Link>
             </div>
           </div>
@@ -58,7 +61,9 @@ export default function Lobby() {
       {openRaffle && (
         <Link to={`/raffles/${openRaffle.id}`} className="card flex flex-wrap items-center justify-between gap-4 p-6 transition hover:shadow-glow">
           <div className="flex items-center gap-4">
-            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-holo text-2xl text-night">🎉</span>
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-holo text-night">
+              <PartyPopper size={26} />
+            </span>
             <div>
               <div className="text-lg font-bold">{openRaffle.title}</div>
               <div className="text-sm text-white/55">
@@ -66,7 +71,7 @@ export default function Lobby() {
               </div>
             </div>
           </div>
-          <span className="btn-soft">{t('raffles.join')} →</span>
+          <span className="btn-soft inline-flex items-center gap-1.5">{t('raffles.join')} <ArrowRight size={16} /></span>
         </Link>
       )}
 
@@ -79,9 +84,9 @@ export default function Lobby() {
 
       {/* Feature cards */}
       <section className="grid gap-4 md:grid-cols-3">
-        <Feature icon="🔐" title={t('lobby.fair')} desc={t('lobby.fairDesc')} />
-        <Feature icon="📈" title="RTP 99%" desc={t('lobby.rtpDesc')} />
-        <Feature icon="⚡" title={t('lobby.instant')} desc={t('lobby.instantDesc')} />
+        <Feature icon={ShieldCheck} title={t('lobby.fair')} desc={t('lobby.fairDesc')} accent="text-mint" />
+        <Feature icon={TrendingUp} title="RTP 99%" desc={t('lobby.rtpDesc')} accent="text-sky" />
+        <Feature icon={Zap} title={t('lobby.instant')} desc={t('lobby.instantDesc')} accent="text-sun" />
       </section>
     </div>
   );
@@ -129,7 +134,9 @@ function BiggestWins({ wins }: { wins: any[] }) {
   const { t } = useTranslation();
   return (
     <div className="card p-5">
-      <h2 className="mb-4 text-lg font-bold">🏆 {t('lobby.biggestWins')}</h2>
+      <h2 className="mb-4 flex items-center gap-2 text-lg font-bold">
+        <Trophy size={18} className="text-sun" /> {t('lobby.biggestWins')}
+      </h2>
       <div className="space-y-1.5">
         {wins.length === 0 && <div className="py-6 text-center text-sm text-white/40">{t('common.empty')}</div>}
         {wins.map((w, i) => (
@@ -154,10 +161,12 @@ function Stat({ label, value, accent }: { label: string; value: any; accent: str
   );
 }
 
-function Feature({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function Feature({ icon: Icon, title, desc, accent }: { icon: LucideIcon; title: string; desc: string; accent: string }) {
   return (
     <div className="card p-6">
-      <div className="mb-3 text-3xl">{icon}</div>
+      <div className="mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-white/[0.04]">
+        <Icon size={24} className={accent} />
+      </div>
       <div className="text-lg font-bold">{title}</div>
       <div className="mt-1 text-sm text-white/55">{desc}</div>
     </div>

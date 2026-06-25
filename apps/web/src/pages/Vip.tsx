@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { BadgePercent, Repeat, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 import { fmt } from '../lib/hooks';
 import { useAuth } from '../store/auth';
 
-export default function Vip() {
+export default function Vip({ embedded = false }: { embedded?: boolean }) {
   const { t, i18n } = useTranslation();
   const en = i18n.language?.startsWith('en');
   const authed = !!useAuth((s) => s.accessToken);
@@ -13,18 +14,22 @@ export default function Vip() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold">👑 {t('vip.title')}</h1>
+      {!embedded && (
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+          <Sparkles size={24} className="text-sun" /> {t('vip.title')}
+        </h1>
+      )}
 
       {authed && status && (
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs uppercase text-white/40">{t('vip.level')}</div>
-              <div className="text-3xl font-extrabold holo-text">{status.current?.name} · {status.level}</div>
+              <div className="holo-text text-3xl font-extrabold">{status.current?.name} · {status.level}</div>
             </div>
             <div className="text-right text-sm text-white/60">
-              <div>{t('vip.cashback')}: <b className="text-mint">{status.current?.cashbackPercent}%</b></div>
-              <div>{t('vip.rakeback')}: <b className="text-sky">{status.current?.rakebackPercent}%</b></div>
+              <div className="flex items-center justify-end gap-1.5"><BadgePercent size={14} className="text-mint" /> {t('vip.cashback')}: <b className="text-mint">{status.current?.cashbackPercent}%</b></div>
+              <div className="flex items-center justify-end gap-1.5"><Repeat size={14} className="text-sky" /> {t('vip.rakeback')}: <b className="text-sky">{status.current?.rakebackPercent}%</b></div>
             </div>
           </div>
           <div className="mt-4">
@@ -52,8 +57,8 @@ export default function Vip() {
             </div>
             <div className="text-sm text-white/60">XP: {fmt(l.xpRequired, 0)}</div>
             <div className="mt-2 space-y-1 text-sm">
-              <div>💸 {t('vip.cashback')}: {l.cashbackPercent}%</div>
-              <div>🔁 {t('vip.rakeback')}: {l.rakebackPercent}%</div>
+              <div>{t('vip.cashback')}: {l.cashbackPercent}%</div>
+              <div>{t('vip.rakeback')}: {l.rakebackPercent}%</div>
               <div className="text-white/50">{en ? l.perksEn : l.perksRu}</div>
             </div>
           </div>

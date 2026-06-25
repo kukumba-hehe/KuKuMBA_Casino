@@ -1,24 +1,23 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { BadgePercent } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api, { apiError } from '../lib/api';
 import { fmt } from '../lib/hooks';
+import { toast } from '../store/toast';
 
-export default function Cashback() {
+export default function Cashback({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['cashback'], queryFn: async () => (await api.get('/cashback/status')).data });
-  const [msg, setMsg] = useState('');
 
   const claim = async () => {
-    setMsg('');
     try {
       await api.post('/cashback/claim');
-      setMsg('✅ Кешбэк зачислен / Cashback credited');
+      toast.success(t('common.done'));
       qc.invalidateQueries({ queryKey: ['cashback'] });
       qc.invalidateQueries({ queryKey: ['balances'] });
     } catch (e) {
-      setMsg('⚠ ' + apiError(e));
+      toast.error(apiError(e));
     }
   };
 
@@ -27,10 +26,14 @@ export default function Cashback() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-2xl font-extrabold">💸 {t('nav.cashback')}</h1>
+      {!embedded && (
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold">
+          <BadgePercent size={24} className="text-mint" /> {t('nav.cashback')}
+        </h1>
+      )}
       <div className="card space-y-4 p-6 text-center">
         <div className="text-sm text-white/50">Ваш процент кешбэка (от VIP-уровня)</div>
-        <div className="text-5xl font-extrabold holo-text">{data?.percent ?? 0}%</div>
+        <div className="holo-text text-5xl font-extrabold">{data?.percent ?? 0}%</div>
         {has ? (
           <div className="space-y-2">
             {items.map((i: any) => (
@@ -44,7 +47,6 @@ export default function Cashback() {
         ) : (
           <div className="text-white/40">Нет доступного кешбэка. Делайте ставки, чтобы накопить.</div>
         )}
-        {msg && <div className="text-sm">{msg}</div>}
       </div>
       <p className="text-center text-xs text-white/40">
         Кешбэк рассчитывается от чистых потерь с момента последнего получения.
