@@ -1,11 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import api from '../lib/api';
-import { useBalances, useOnline } from '../lib/hooks';
-import { fmt } from '../lib/hooks';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import i18n from '../i18n';
+import api from '../lib/api';
+import { fmt, useBalances, useOnline } from '../lib/hooks';
 import { useAuth } from '../store/auth';
 import { useUI } from '../store/ui';
 import { Logo, Mascot } from './Mascot';
@@ -19,14 +18,26 @@ const NAV = [
   { to: '/referrals', key: 'referrals' },
 ];
 
-function LangSwitch() {
-  const [, setT] = useState(0);
+// Secondary destinations surfaced in the mobile "More" sheet.
+const MORE_LINKS = [
+  { to: '/bonuses', key: 'bonuses', icon: '🎁' },
+  { to: '/promo', key: 'promo', icon: '🏷' },
+  { to: '/vip', key: 'vip', icon: '👑' },
+  { to: '/referrals', key: 'referrals', icon: '🤝' },
+  { to: '/cashback', key: 'cashback', icon: '💸' },
+  { to: '/notifications', key: 'notifications', icon: '🔔' },
+  { to: '/profile', key: 'profile', icon: '🦄' },
+  { to: '/support', key: 'support', icon: '🛟' },
+];
+
+function LangSwitch({ className = '' }: { className?: string }) {
+  const [, force] = useState(0);
   const set = (lng: string) => {
     i18n.changeLanguage(lng);
-    setT((x) => x + 1);
+    force((x) => x + 1);
   };
   return (
-    <div className="flex overflow-hidden rounded-xl border border-white/10 text-xs">
+    <div className={`flex overflow-hidden rounded-xl border border-white/10 text-xs ${className}`}>
       {['ru', 'en'].map((l) => (
         <button
           key={l}
@@ -42,31 +53,33 @@ function LangSwitch() {
   );
 }
 
-function BalancePill() {
+function ModeBalance({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
   const { mode, setMode, currency } = useUI();
   const { data: balances } = useBalances();
   const bal = balances?.find((b) => b.mode === mode && b.currency === currency);
   return (
-    <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/30 p-1 pl-1.5">
-      <div className="flex overflow-hidden rounded-xl text-xs font-semibold">
+    <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-black/30 p-1 pl-1.5">
+      <div className="flex overflow-hidden rounded-lg text-[11px] font-bold">
         <button
           onClick={() => setMode('DEMO')}
-          className={`px-2 py-1 transition ${mode === 'DEMO' ? 'bg-lav/30 text-white' : 'text-white/50'}`}
+          className={`px-1.5 py-1 transition ${mode === 'DEMO' ? 'bg-lav/30 text-white' : 'text-white/45'}`}
+          title={t('common.demo')}
         >
-          {t('common.demo')}
+          {compact ? 'D' : t('common.demo')}
         </button>
         <button
           onClick={() => setMode('REAL')}
-          className={`px-2 py-1 transition ${mode === 'REAL' ? 'bg-mint/25 text-white' : 'text-white/50'}`}
+          className={`px-1.5 py-1 transition ${mode === 'REAL' ? 'bg-mint/25 text-white' : 'text-white/45'}`}
+          title={t('common.real')}
         >
-          {t('common.real')}
+          {compact ? 'R' : t('common.real')}
         </button>
       </div>
-      <div className="px-1.5 text-sm font-bold tabular-nums">
-        {fmt(bal?.amount ?? '0', 4)} <span className="text-white/40">{currency}</span>
-      </div>
-      <Link to="/wallet" className="btn-primary !px-3 !py-1.5 text-sm">
+      <Link to="/wallet" className="px-1 text-sm font-bold tabular-nums">
+        {fmt(bal?.amount ?? '0', compact ? 2 : 4)} <span className="text-white/40">{currency}</span>
+      </Link>
+      <Link to="/wallet" className="btn-primary !rounded-xl !px-2.5 !py-1 text-sm">
         +
       </Link>
     </div>
@@ -81,7 +94,7 @@ function Bell() {
   });
   const count = data?.count ?? 0;
   return (
-    <Link to="/notifications" className="relative grid h-10 w-10 place-items-center rounded-xl hover:bg-white/5">
+    <Link to="/notifications" className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl hover:bg-white/5">
       <span className="text-lg">🔔</span>
       {count > 0 && (
         <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-bubble px-1 text-[11px] font-bold text-night">
@@ -117,10 +130,7 @@ function AccountMenu() {
         <span className="hidden text-sm font-semibold sm:block">{user?.username}</span>
       </button>
       {open && (
-        <div
-          className="absolute right-0 mt-2 w-52 overflow-hidden rounded-2xl border border-white/10 bg-surface-2 shadow-card"
-          onMouseLeave={() => setOpen(false)}
-        >
+        <div className="absolute right-0 mt-2 w-52 overflow-hidden rounded-2xl border border-white/10 bg-surface-2 shadow-card" onMouseLeave={() => setOpen(false)}>
           <div className="border-b border-white/10 px-4 py-3 text-xs text-white/50">
             ID #{user?.accountId} · {user?.role}
           </div>
@@ -128,15 +138,9 @@ function AccountMenu() {
             ['/profile', 'Профиль / Profile'],
             ['/wallet', 'Кошелёк / Wallet'],
             ['/cashback', 'Кешбэк / Cashback'],
-            ['/promo', 'Промокоды / Promo'],
             ['/support', 'Поддержка / Support'],
           ].map(([to, label]) => (
-            <Link
-              key={to}
-              to={to}
-              onClick={() => setOpen(false)}
-              className="block px-4 py-2.5 text-sm hover:bg-white/5"
-            >
+            <Link key={to} to={to} onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-white/5">
               {label}
             </Link>
           ))}
@@ -154,19 +158,173 @@ function AccountMenu() {
   );
 }
 
+/** Mobile bottom tab bar. 4 primary destinations + a "More" sheet trigger. */
+function BottomNav({ onMore, moreOpen }: { onMore: () => void; moreOpen: boolean }) {
+  const { t } = useTranslation();
+  const authed = !!useAuth((s) => s.accessToken);
+  const tabs = [
+    { to: '/', key: 'lobby', icon: '🏠', end: true },
+    { to: '/roulette', key: 'roulette', icon: '🎯' },
+    { to: '/raffles', key: 'raffles', icon: '🎉' },
+    authed ? { to: '/wallet', key: 'wallet', icon: '💼' } : { to: '/bonuses', key: 'bonuses', icon: '🎁' },
+  ];
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 glass border-t border-white/10 lg:hidden"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      <div className="mx-auto grid max-w-lg grid-cols-5">
+        {tabs.map((tb) => (
+          <NavLink
+            key={tb.to}
+            to={tb.to}
+            end={(tb as any).end}
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 py-2 text-[11px] transition ${
+                isActive && !moreOpen ? 'text-white' : 'text-white/55'
+              }`
+            }
+          >
+            <span className="text-xl leading-none">{tb.icon}</span>
+            {t(`nav.${tb.key}`)}
+          </NavLink>
+        ))}
+        <button
+          onClick={onMore}
+          className={`flex flex-col items-center gap-0.5 py-2 text-[11px] transition ${moreOpen ? 'text-white' : 'text-white/55'}`}
+        >
+          <span className="text-xl leading-none">☰</span>
+          Ещё
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const { user, clear } = useAuth();
+  const authed = !!user;
+  const navigate = useNavigate();
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout', { refreshToken: useAuth.getState().refreshToken });
+    } catch {
+      /* ignore */
+    }
+    clear();
+    onClose();
+    navigate('/');
+  };
+  return (
+    <div className={`fixed inset-0 z-50 lg:hidden ${open ? '' : 'pointer-events-none'}`} aria-hidden={!open}>
+      <div
+        className={`absolute inset-0 bg-black/60 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`}
+        onClick={onClose}
+      />
+      <div
+        className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-white/10 bg-surface-2 p-5 transition-transform duration-200 ${
+          open ? 'translate-y-0' : 'translate-y-full'
+        }`}
+        style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+      >
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/15" />
+
+        {authed ? (
+          <div className="mb-4 flex items-center gap-3 rounded-2xl bg-white/5 p-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-holo text-night">
+              <Mascot size={26} />
+            </span>
+            <div className="min-w-0">
+              <div className="truncate font-bold">{user?.username}</div>
+              <div className="text-xs text-white/50">ID #{user?.accountId} · {user?.role}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <Link to="/login" onClick={onClose} className="btn-ghost">
+              {t('common.login')}
+            </Link>
+            <Link to="/register" onClick={onClose} className="btn-primary">
+              {t('common.register')}
+            </Link>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-2">
+          {MORE_LINKS.map((l) => (
+            <NavLink
+              key={l.to}
+              to={l.to}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 rounded-2xl border border-white/10 py-3 text-xs ${
+                  isActive ? 'bg-white/10 text-white' : 'bg-white/[0.03] text-white/70'
+                }`
+              }
+            >
+              <span className="text-xl">{l.icon}</span>
+              {t(`nav.${l.key}`)}
+            </NavLink>
+          ))}
+          {user?.role === 'ADMIN' && (
+            <NavLink
+              to="/admin"
+              onClick={onClose}
+              className="flex flex-col items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] py-3 text-xs text-sun"
+            >
+              <span className="text-xl">⚙</span>
+              Admin
+            </NavLink>
+          )}
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Link to="/page/about" onClick={onClose} className="text-white/55 hover:text-white">
+              {t('nav.about')}
+            </Link>
+            <Link to="/page/responsible-gaming" onClick={onClose} className="text-white/55 hover:text-white">
+              {t('nav.responsible')}
+            </Link>
+            <Link to="/page/contacts" onClick={onClose} className="text-white/55 hover:text-white">
+              {t('nav.contacts')}
+            </Link>
+          </div>
+          <LangSwitch />
+        </div>
+
+        {authed && (
+          <button onClick={logout} className="btn-ghost mt-4 w-full text-bubble">
+            {t('common.logout')}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Layout() {
   const { t } = useTranslation();
   const authed = !!useAuth((s) => s.accessToken);
   const online = useOnline();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const location = useLocation();
+
+  // close the mobile sheet on navigation
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-40 glass border-b border-white/10">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4">
+        {/* Desktop header */}
+        <div className="mx-auto hidden h-16 max-w-7xl items-center justify-between gap-3 px-4 lg:flex">
           <Link to="/">
             <Logo />
           </Link>
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="flex items-center gap-1">
             {NAV.map((n) => (
               <NavLink
                 key={n.to}
@@ -179,11 +337,11 @@ export default function Layout() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
-            <span className="chip hidden sm:inline-flex">
+            <span className="chip">
               <span className="h-2 w-2 rounded-full bg-mint shadow-glow-mint" />
               {Math.max(online.sockets, 1)} {t('common.online')}
             </span>
-            {authed && <BalancePill />}
+            {authed && <ModeBalance />}
             <LangSwitch />
             {authed && <Bell />}
             {authed ? (
@@ -200,28 +358,42 @@ export default function Layout() {
             )}
           </div>
         </div>
-        {/* mobile nav */}
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-2 lg:hidden">
-          {NAV.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.end}
-              className={({ isActive }) =>
-                `whitespace-nowrap rounded-xl px-3 py-1.5 text-sm ${isActive ? 'bg-white/10 text-white' : 'text-white/60'}`
-              }
-            >
-              {t(`nav.${n.key}`)}
-            </NavLink>
-          ))}
-        </nav>
+
+        {/* Mobile header (slim) */}
+        <div className="flex h-14 items-center justify-between gap-2 px-3 lg:hidden">
+          <Link to="/" className="shrink-0">
+            <Logo />
+          </Link>
+          <div className="flex min-w-0 items-center gap-1.5">
+            {authed ? (
+              <>
+                <ModeBalance compact />
+                <Bell />
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="btn-ghost !px-3 !py-1.5 text-sm">
+                  {t('common.login')}
+                </Link>
+                <Link to="/register" className="btn-primary !px-3 !py-1.5 text-sm">
+                  {t('common.register')}
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-3 py-5 sm:px-4 sm:py-6">
         <Outlet />
       </main>
 
       <Footer />
+
+      <BottomNav onMore={() => setMoreOpen(true)} moreOpen={moreOpen} />
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
+      {/* spacer so fixed bottom nav never hides content on mobile */}
+      <div className="h-16 lg:hidden" />
     </div>
   );
 }
