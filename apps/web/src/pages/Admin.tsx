@@ -131,19 +131,9 @@ function Users({ me }: { me: AdminMe }) {
   const { data } = useQuery({ queryKey: ['adm-users', q], queryFn: async () => (await api.get(`/admin/users?q=${encodeURIComponent(q)}`)).data });
   const { data: user } = useQuery({ queryKey: ['adm-user', sel], enabled: !!sel, queryFn: async () => (await api.get(`/admin/users/${sel}`)).data });
 
-  const [amount, setAmount] = useState('100');
-  const [currency, setCurrency] = useState('DEMO');
-  const [mode, setMode] = useState('DEMO');
-
-  const act = async (fn: () => Promise<any>, ok = 'Done') => {
-    try {
-      await fn();
-      qc.invalidateQueries({ queryKey: ['adm-user', sel] });
-      qc.invalidateQueries({ queryKey: ['adm-users', q] });
-      toast.success(ok);
-    } catch (e) {
-      toast.error(apiError(e));
-    }
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['adm-user', sel] });
+    qc.invalidateQueries({ queryKey: ['adm-users', q] });
   };
 
   return (
@@ -161,64 +151,151 @@ function Users({ me }: { me: AdminMe }) {
         </div>
       </div>
 
-      {user && (
-        <div className="card space-y-3 p-4">
-          <div className="font-bold">{user.username} · #{user.accountId}</div>
-          <div className="text-sm text-white/50">{user.email} · VIP {user.vipLevel} · KYC {user.kycStatus}</div>
-          <div className="flex flex-wrap gap-1.5 text-sm">
-            {(user.balances ?? []).map((b: any) => (
-              <span key={b.currency + b.mode} className="chip">{fmt(b.amount, 4)} {b.currency} ({b.mode})</span>
-            ))}
+      {user && <UserDetail key={user.id} user={user} me={me} refresh={refresh} />}
+    </div>
+  );
+}
+
+function UserDetail({ user, me, refresh }: { user: any; me: AdminMe; refresh: () => void }) {
+  const id = user.id;
+  const [amount, setAmount] = useState('100');
+  const [currency, setCurrency] = useState('DEMO');
+  const [mode, setMode] = useState('DEMO');
+  const [banReason, setBanReason] = useState('');
+  const [email, setEmail] = useState(user.email ?? '');
+  const [username, setUsername] = useState(user.username ?? '');
+  const [notif, setNotif] = useState({ titleRu: '', titleEn: '', bodyRu: '', bodyEn: '' });
+  const [showBets, setShowBets] = useState(false);
+
+  const { data: bets } = useQuery({ queryKey: ['adm-user-bets', id], enabled: showBets, queryFn: async () => (await api.get(`/admin/users/${id}/bets?take=25`)).data });
+  const { data: sessions } = useQuery({ queryKey: ['adm-user-sessions', id], enabled: can(me, 'users.edit'), queryFn: async () => (await api.get(`/admin/users/${id}/sessions`)).data });
+
+  const act = async (fn: () => Promise<any>, ok = 'Done') => {
+    try { await fn(); refresh(); toast.success(ok); } catch (e) { toast.error(apiError(e)); }
+  };
+  const muted = user.chatMutedUntil && new Date(user.chatMutedUntil) > new Date();
+
+  return (
+    <div className="card space-y-3 p-4">
+      <div className="font-bold">{user.username} · #{user.accountId} <span className="chip ml-1 text-xs">{user.role}</span></div>
+      <div className="text-sm text-white/50">
+        {user.email}{user.emailVerified ? ' ✓' : ' (unverified)'} · VIP {user.vipLevel} · KYC {user.kycStatus} · {user.status}
+        {muted && <span className="ml-1 text-roul-red">· muted</span>}
+      </div>
+      <div className="flex flex-wrap gap-1.5 text-sm">
+        {(user.balances ?? []).map((b: any) => (
+          <span key={b.currency + b.mode} className="chip">{fmt(b.amount, 4)} {b.currency} ({b.mode})</span>
+        ))}
+      </div>
+
+      {can(me, 'users.balance') && (
+        <div className="space-y-2 rounded-xl bg-black/30 p-3">
+          <div className="text-xs text-white/40">Balance adjustment</div>
+          <div className="grid grid-cols-3 gap-2">
+            <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <input className="input" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+            <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option>DEMO</option>
+              <option>REAL</option>
+            </select>
           </div>
-          {can(me, 'users.balance') && (
-            <div className="space-y-2 rounded-xl bg-black/30 p-3">
-              <div className="text-xs text-white/40">Balance adjustment</div>
-              <div className="grid grid-cols-3 gap-2">
-                <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                <input className="input" value={currency} onChange={(e) => setCurrency(e.target.value)} />
-                <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
-                  <option>DEMO</option>
-                  <option>REAL</option>
-                </select>
-              </div>
-              <button onClick={() => act(() => api.post('/admin/balance/adjust', { userId: sel, currency, mode, amount }), 'Balance updated')} className="btn-soft w-full text-sm">
-                Apply
-              </button>
-            </div>
+          <button onClick={() => act(() => api.post('/admin/balance/adjust', { userId: id, currency, mode, amount }), 'Balance updated')} className="btn-soft w-full text-sm">Apply</button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {can(me, 'kyc.review') && (
+          <>
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/kyc`, { approve: true }), 'KYC approved')} className="btn-ghost inline-flex items-center gap-1 text-sm text-mint"><Check size={14} /> KYC</button>
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/kyc`, { approve: false, note: 'rejected' }), 'KYC rejected')} className="btn-ghost inline-flex items-center gap-1 text-sm"><X size={14} /> KYC</button>
+          </>
+        )}
+        {can(me, 'users.vip') && (
+          <button onClick={() => act(() => api.post(`/admin/users/${id}/vip`, { level: (user.vipLevel ?? 0) + 1 }), 'VIP +1')} className="btn-ghost text-sm">VIP +1</button>
+        )}
+        {can(me, 'chat.moderate') && (
+          muted ? (
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/mute`, { minutes: 0 }), 'Unmuted')} className="btn-ghost text-sm text-mint">Unmute</button>
+          ) : (
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/mute`, { minutes: 60 }), 'Muted 60m')} className="btn-ghost text-sm">Mute 60m</button>
+          )
+        )}
+        {can(me, 'users.role') && (
+          <label className="inline-flex items-center gap-1.5 text-sm text-white/50">
+            Role
+            <select className="input !py-1.5 !w-32" value={user.role} onChange={(e) => act(() => api.post(`/admin/users/${id}/role`, { role: e.target.value }), `Role: ${e.target.value}`)}>
+              {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+
+      {can(me, 'users.ban') && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-black/30 p-3">
+          {user.status === 'BANNED' ? (
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/status`, { status: 'ACTIVE' }), 'Unbanned')} className="btn-ghost text-sm text-mint">Unban</button>
+          ) : (
+            <>
+              <input className="input flex-1 !py-1.5" placeholder="Ban reason (optional)" value={banReason} onChange={(e) => setBanReason(e.target.value)} />
+              <button onClick={() => act(() => api.post(`/admin/users/${id}/status`, { status: 'BANNED', reason: banReason }), 'Banned')} className="btn-ghost text-sm text-roul-red">Ban</button>
+            </>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            {can(me, 'users.ban') &&
-              (user.status === 'BANNED' ? (
-                <button onClick={() => act(() => api.post(`/admin/users/${sel}/status`, { status: 'ACTIVE' }), 'Unbanned')} className="btn-ghost text-sm text-mint">Unban</button>
-              ) : (
-                <button onClick={() => act(() => api.post(`/admin/users/${sel}/status`, { status: 'BANNED' }), 'Banned')} className="btn-ghost text-sm text-roul-red">Ban</button>
-              ))}
-            {can(me, 'kyc.review') && (
-              <>
-                <button onClick={() => act(() => api.post(`/admin/users/${sel}/kyc`, { approve: true }), 'KYC approved')} className="btn-ghost inline-flex items-center gap-1 text-sm text-mint"><Check size={14} /> KYC</button>
-                <button onClick={() => act(() => api.post(`/admin/users/${sel}/kyc`, { approve: false, note: 'rejected' }), 'KYC rejected')} className="btn-ghost inline-flex items-center gap-1 text-sm"><X size={14} /> KYC</button>
-              </>
-            )}
-            {can(me, 'users.vip') && (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/vip`, { level: (user.vipLevel ?? 0) + 1 }), 'VIP +1')} className="btn-ghost text-sm">VIP +1</button>
-            )}
-            {can(me, 'users.role') && (
-              <label className="inline-flex items-center gap-1.5 text-sm text-white/50">
-                Role
-                <select
-                  className="input !py-1.5 !w-32"
-                  value={user.role}
-                  onChange={(e) => act(() => api.post(`/admin/users/${sel}/role`, { role: e.target.value }), `Role: ${e.target.value}`)}
-                >
-                  {ALL_ROLES.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </label>
+        </div>
+      )}
+
+      {can(me, 'users.edit') && (
+        <div className="space-y-2 rounded-xl bg-black/30 p-3">
+          <div className="text-xs text-white/40">Account</div>
+          <div className="flex flex-wrap gap-2">
+            <input className="input flex-1 !py-1.5" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" />
+            <input className="input flex-1 !py-1.5" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => act(() => api.patch(`/admin/users/${id}`, { email, username }), 'Saved')} className="btn-soft text-sm">Save</button>
+            <button onClick={() => act(() => api.patch(`/admin/users/${id}`, { emailVerified: true }), 'Email verified')} className="btn-ghost text-sm">Verify email</button>
+            <button
+              onClick={() => act(async () => { const { data } = await api.post(`/admin/users/${id}/reset-password`, {}); window.prompt('New password (copy it):', data.password); }, 'Password reset')}
+              className="btn-ghost text-sm"
+            >Reset password</button>
+            {sessions && (
+              <button onClick={() => act(() => api.post(`/admin/users/${id}/revoke-sessions`, {}), 'Sessions revoked')} className="btn-ghost text-sm">
+                Revoke sessions ({(sessions ?? []).filter((s: any) => s.active).length})
+              </button>
             )}
           </div>
         </div>
       )}
+
+      {can(me, 'notifications.send') && (
+        <div className="space-y-2 rounded-xl bg-black/30 p-3">
+          <div className="text-xs text-white/40">Send notification</div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input className="input !py-1.5" placeholder="Заголовок (RU)" value={notif.titleRu} onChange={(e) => setNotif({ ...notif, titleRu: e.target.value })} />
+            <input className="input !py-1.5" placeholder="Title (EN)" value={notif.titleEn} onChange={(e) => setNotif({ ...notif, titleEn: e.target.value })} />
+            <input className="input !py-1.5" placeholder="Текст (RU)" value={notif.bodyRu} onChange={(e) => setNotif({ ...notif, bodyRu: e.target.value })} />
+            <input className="input !py-1.5" placeholder="Body (EN)" value={notif.bodyEn} onChange={(e) => setNotif({ ...notif, bodyEn: e.target.value })} />
+          </div>
+          <button
+            onClick={() => act(async () => { await api.post(`/admin/users/${id}/notify`, notif); setNotif({ titleRu: '', titleEn: '', bodyRu: '', bodyEn: '' }); }, 'Sent')}
+            className="btn-soft text-sm" disabled={!notif.titleRu || !notif.titleEn}
+          >Send</button>
+        </div>
+      )}
+
+      <div>
+        <button onClick={() => setShowBets((s) => !s)} className="text-sm text-lav hover:underline">{showBets ? 'Hide' : 'Show'} recent bets</button>
+        {showBets && (
+          <div className="mt-2 max-h-60 space-y-1 overflow-y-auto text-xs">
+            {(bets ?? []).map((b: any) => (
+              <div key={b.id} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2.5 py-1.5">
+                <span>{b.betType} · {b.outcome}</span>
+                <span className={Number(b.payout) > 0 ? 'text-mint' : 'text-white/40'}>{Number(b.payout) > 0 ? `+${fmt(b.payout, 2)}` : `−${fmt(b.stake, 2)}`} {b.currency}</span>
+              </div>
+            ))}
+            {(bets ?? []).length === 0 && <div className="py-2 text-center text-white/30">—</div>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

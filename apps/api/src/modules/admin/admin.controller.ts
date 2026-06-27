@@ -51,7 +51,43 @@ export class AdminController {
   @Post('users/:id/status')
   @RequirePermission('users.ban')
   status(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
-    return this.admin.setUserStatus(adminId, id, body.status);
+    return this.admin.setUserStatus(adminId, id, body.status, body.reason);
+  }
+
+  @Patch('users/:id')
+  @RequirePermission('users.edit')
+  editUser(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
+    return this.admin.updateUserAccount(adminId, id, body);
+  }
+
+  @Post('users/:id/notify')
+  @RequirePermission('notifications.send')
+  notifyUser(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
+    return this.admin.notifyUser(adminId, id, body);
+  }
+
+  @Post('users/:id/reset-password')
+  @RequirePermission('users.edit')
+  resetPassword(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() body: any) {
+    return this.admin.resetUserPassword(adminId, id, body?.password);
+  }
+
+  @Get('users/:id/sessions')
+  @RequirePermission('users.view')
+  sessions(@Param('id') id: string) {
+    return this.admin.listSessions(id);
+  }
+
+  @Post('users/:id/revoke-sessions')
+  @RequirePermission('users.edit')
+  revokeSessions(@CurrentUser('id') adminId: string, @Param('id') id: string) {
+    return this.admin.revokeSessions(adminId, id);
+  }
+
+  @Get('users/:id/bets')
+  @RequirePermission('users.view')
+  userBets(@Param('id') id: string, @Query('take') take?: string) {
+    return this.admin.userBets(id, take ? +take : 25);
   }
 
   @Post('users/:id/role')
