@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import { Toaster } from './components/Toaster';
+import { isStaff } from './lib/roles';
 import { reconnectSocket } from './lib/socket';
 import { useAuth } from './store/auth';
 
@@ -23,7 +24,7 @@ function RequireAuth({ children, admin }: { children: JSX.Element; admin?: boole
   const { accessToken, user } = useAuth();
   const location = useLocation();
   if (!accessToken) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (admin && user?.role !== 'ADMIN') return <Navigate to="/" replace />;
+  if (admin && !isStaff(user?.role)) return <Navigate to="/" replace />;
   return children;
 }
 

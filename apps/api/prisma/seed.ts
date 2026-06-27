@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { genReferralCode } from '../src/common/utils/ids';
+import { DEFAULT_GRANTS } from '../src/modules/permissions/permissions.registry';
 import { genServerSeed, hashServerSeed } from '../src/modules/provably-fair/provably-fair.crypto';
 
 const prisma = new PrismaClient();
@@ -263,6 +264,17 @@ async function main() {
   };
   for (const [key, value] of Object.entries(settings)) {
     await prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
+  }
+
+  // ── RBAC default grants (idempotent; never overrides later admin edits) ──
+  for (const [role, perms] of Object.entries(DEFAULT_GRANTS)) {
+    for (const permission of perms) {
+      await prisma.rolePermission.upsert({
+        where: { role_permission: { role: role as any, permission } },
+        create: { role: role as any, permission, allowed: true },
+        update: {},
+      });
+    }
   }
 
   // ── Content pages (RU + EN) ───────────────────────────────────────

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import i18n from '../i18n';
+import { isStaff } from '../lib/roles';
 import api from '../lib/api';
 import { useOnline } from '../lib/hooks';
 import { ADMIN, bottomTabs, desktopTabs, MORE_ITEMS, NavItem } from '../lib/nav';
@@ -108,7 +109,7 @@ function AccountButton() {
               <Icon size={16} className="text-white/50" /> {label}
             </Link>
           ))}
-          {user?.role === 'ADMIN' && (
+          {isStaff(user?.role) && (
             <Link to="/admin" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-sun hover:bg-white/5">
               <Shield size={16} /> Admin
             </Link>
@@ -180,7 +181,7 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, clear } = useAuth();
   const authed = !!user;
   const navigate = useNavigate();
-  const items = [...MORE_ITEMS, ...(user?.role === 'ADMIN' ? [ADMIN] : [])];
+  const items = [...MORE_ITEMS, ...(isStaff(user?.role) ? [ADMIN] : [])];
   const logout = async () => {
     try {
       await api.post('/auth/logout', { refreshToken: useAuth.getState().refreshToken });

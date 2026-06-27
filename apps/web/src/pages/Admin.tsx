@@ -13,67 +13,82 @@ import {
   Receipt,
   ScrollText,
   Settings as SettingsIcon,
+  Shield,
   ShieldCheck,
   Tag,
   Users as UsersIcon,
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
-import { fmt } from '../lib/hooks';
+import { can, fmt, useAdminMe, type AdminMe } from '../lib/hooks';
 import { toast } from '../store/toast';
 
-const TABS: { key: string; label: string; icon: LucideIcon }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'users', label: 'Users', icon: UsersIcon },
-  { key: 'deposits', label: 'Deposits', icon: ArrowDownToLine },
-  { key: 'withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine },
-  { key: 'promo', label: 'Promo', icon: Tag },
-  { key: 'bonuses', label: 'Bonuses', icon: Gift },
-  { key: 'raffles', label: 'Raffles', icon: PartyPopper },
-  { key: 'currencies', label: 'Currencies', icon: Coins },
-  { key: 'broadcast', label: 'Broadcast', icon: Megaphone },
-  { key: 'tickets', label: 'Tickets', icon: LifeBuoy },
-  { key: 'transactions', label: 'Transactions', icon: Receipt },
-  { key: 'content', label: 'Content', icon: FileText },
-  { key: 'settings', label: 'Settings', icon: SettingsIcon },
-  { key: 'audit', label: 'Audit', icon: ScrollText },
+// Each tab declares the permission that unlocks it (ADMIN sees all).
+const TABS: { key: string; label: string; icon: LucideIcon; perm: string }[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard.view' },
+  { key: 'users', label: 'Users', icon: UsersIcon, perm: 'users.view' },
+  { key: 'roles', label: 'Roles', icon: Shield, perm: 'roles.manage' },
+  { key: 'deposits', label: 'Deposits', icon: ArrowDownToLine, perm: 'deposits.manage' },
+  { key: 'withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine, perm: 'withdrawals.manage' },
+  { key: 'promo', label: 'Promo', icon: Tag, perm: 'promo.manage' },
+  { key: 'bonuses', label: 'Bonuses', icon: Gift, perm: 'bonuses.manage' },
+  { key: 'raffles', label: 'Raffles', icon: PartyPopper, perm: 'raffles.manage' },
+  { key: 'currencies', label: 'Currencies', icon: Coins, perm: 'currencies.manage' },
+  { key: 'broadcast', label: 'Broadcast', icon: Megaphone, perm: 'notifications.send' },
+  { key: 'tickets', label: 'Tickets', icon: LifeBuoy, perm: 'tickets.manage' },
+  { key: 'transactions', label: 'Transactions', icon: Receipt, perm: 'transactions.view' },
+  { key: 'content', label: 'Content', icon: FileText, perm: 'content.manage' },
+  { key: 'settings', label: 'Settings', icon: SettingsIcon, perm: 'settings.manage' },
+  { key: 'audit', label: 'Audit', icon: ScrollText, perm: 'audit.view' },
 ];
 
 export default function AdminPage() {
+  const { data: me } = useAdminMe();
+  const visible = useMemo(() => TABS.filter((t) => can(me, t.perm)), [me]);
   const [tab, setTab] = useState('dashboard');
+  // Fall back to the first tab the operator can actually see.
+  const active = visible.some((t) => t.key === tab) ? tab : visible[0]?.key;
+
+  if (!me) return <div className="card p-6 text-center text-white/50">{i18n.t('common.loading')}</div>;
+  if (visible.length === 0)
+    return <div className="card p-6 text-center text-white/50">No permissions assigned to your role yet.</div>;
+
   return (
     <div className="space-y-5">
       <h1 className="flex items-center gap-2 text-2xl font-extrabold">
         <ShieldCheck size={24} className="text-lav" /> Admin · KuKuMBA
+        <span className="chip ml-1 text-xs">{me.role}</span>
       </h1>
       <div className="flex flex-wrap gap-1.5">
-        {TABS.map(({ key, label, icon: Icon }) => (
+        {visible.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm transition ${tab === key ? 'bg-white/15 text-white' : 'bg-white/5 text-white/60 hover:text-white'}`}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm transition ${active === key ? 'bg-white/15 text-white' : 'bg-white/5 text-white/60 hover:text-white'}`}
           >
             <Icon size={15} /> {label}
           </button>
         ))}
       </div>
-      {tab === 'dashboard' && <Dashboard />}
-      {tab === 'users' && <Users />}
-      {tab === 'deposits' && <Deposits />}
-      {tab === 'withdrawals' && <Withdrawals />}
-      {tab === 'promo' && <Promo />}
-      {tab === 'bonuses' && <Bonuses />}
-      {tab === 'raffles' && <RafflesAdmin />}
-      {tab === 'currencies' && <Currencies />}
-      {tab === 'broadcast' && <Broadcast />}
-      {tab === 'tickets' && <Tickets />}
-      {tab === 'transactions' && <Transactions />}
-      {tab === 'content' && <Content />}
-      {tab === 'settings' && <Settings />}
-      {tab === 'audit' && <Audit />}
+      {active === 'dashboard' && <Dashboard />}
+      {active === 'users' && <Users me={me} />}
+      {active === 'roles' && <Roles />}
+      {active === 'deposits' && <Deposits />}
+      {active === 'withdrawals' && <Withdrawals />}
+      {active === 'promo' && <Promo />}
+      {active === 'bonuses' && <Bonuses />}
+      {active === 'raffles' && <RafflesAdmin />}
+      {active === 'currencies' && <Currencies />}
+      {active === 'broadcast' && <Broadcast />}
+      {active === 'tickets' && <Tickets />}
+      {active === 'transactions' && <Transactions />}
+      {active === 'content' && <Content />}
+      {active === 'settings' && <Settings />}
+      {active === 'audit' && <Audit />}
     </div>
   );
 }
@@ -101,7 +116,9 @@ function Dashboard() {
   );
 }
 
-function Users() {
+const ALL_ROLES = ['USER', 'PARTNER', 'SUPPORT', 'MODERATOR', 'ADMIN'];
+
+function Users({ me }: { me: AdminMe }) {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<string | null>(null);
@@ -147,33 +164,51 @@ function Users() {
               <span key={b.currency + b.mode} className="chip">{fmt(b.amount, 4)} {b.currency} ({b.mode})</span>
             ))}
           </div>
-          <div className="space-y-2 rounded-xl bg-black/30 p-3">
-            <div className="text-xs text-white/40">Balance adjustment</div>
-            <div className="grid grid-cols-3 gap-2">
-              <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-              <input className="input" value={currency} onChange={(e) => setCurrency(e.target.value)} />
-              <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
-                <option>DEMO</option>
-                <option>REAL</option>
-              </select>
+          {can(me, 'users.balance') && (
+            <div className="space-y-2 rounded-xl bg-black/30 p-3">
+              <div className="text-xs text-white/40">Balance adjustment</div>
+              <div className="grid grid-cols-3 gap-2">
+                <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <input className="input" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+                <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
+                  <option>DEMO</option>
+                  <option>REAL</option>
+                </select>
+              </div>
+              <button onClick={() => act(() => api.post('/admin/balance/adjust', { userId: sel, currency, mode, amount }), 'Balance updated')} className="btn-soft w-full text-sm">
+                Apply
+              </button>
             </div>
-            <button onClick={() => act(() => api.post('/admin/balance/adjust', { userId: sel, currency, mode, amount }), 'Balance updated')} className="btn-soft w-full text-sm">
-              Apply
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {user.status === 'BANNED' ? (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/status`, { status: 'ACTIVE' }), 'Unbanned')} className="btn-ghost text-sm text-mint">Unban</button>
-            ) : (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/status`, { status: 'BANNED' }), 'Banned')} className="btn-ghost text-sm text-roul-red">Ban</button>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {can(me, 'users.ban') &&
+              (user.status === 'BANNED' ? (
+                <button onClick={() => act(() => api.post(`/admin/users/${sel}/status`, { status: 'ACTIVE' }), 'Unbanned')} className="btn-ghost text-sm text-mint">Unban</button>
+              ) : (
+                <button onClick={() => act(() => api.post(`/admin/users/${sel}/status`, { status: 'BANNED' }), 'Banned')} className="btn-ghost text-sm text-roul-red">Ban</button>
+              ))}
+            {can(me, 'kyc.review') && (
+              <>
+                <button onClick={() => act(() => api.post(`/admin/users/${sel}/kyc`, { approve: true }), 'KYC approved')} className="btn-ghost inline-flex items-center gap-1 text-sm text-mint"><Check size={14} /> KYC</button>
+                <button onClick={() => act(() => api.post(`/admin/users/${sel}/kyc`, { approve: false, note: 'rejected' }), 'KYC rejected')} className="btn-ghost inline-flex items-center gap-1 text-sm"><X size={14} /> KYC</button>
+              </>
             )}
-            <button onClick={() => act(() => api.post(`/admin/users/${sel}/kyc`, { approve: true }), 'KYC approved')} className="btn-ghost inline-flex items-center gap-1 text-sm text-mint"><Check size={14} /> KYC</button>
-            <button onClick={() => act(() => api.post(`/admin/users/${sel}/kyc`, { approve: false, note: 'rejected' }), 'KYC rejected')} className="btn-ghost inline-flex items-center gap-1 text-sm"><X size={14} /> KYC</button>
-            <button onClick={() => act(() => api.post(`/admin/users/${sel}/vip`, { level: (user.vipLevel ?? 0) + 1 }), 'VIP +1')} className="btn-ghost text-sm">VIP +1</button>
-            {user.role === 'ADMIN' ? (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/role`, { role: 'USER' }), 'Role: user')} className="btn-ghost text-sm">Make user</button>
-            ) : (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/role`, { role: 'ADMIN' }), 'Role: admin')} className="btn-ghost text-sm text-lav">Make admin</button>
+            {can(me, 'users.vip') && (
+              <button onClick={() => act(() => api.post(`/admin/users/${sel}/vip`, { level: (user.vipLevel ?? 0) + 1 }), 'VIP +1')} className="btn-ghost text-sm">VIP +1</button>
+            )}
+            {can(me, 'users.role') && (
+              <label className="inline-flex items-center gap-1.5 text-sm text-white/50">
+                Role
+                <select
+                  className="input !py-1.5 !w-32"
+                  value={user.role}
+                  onChange={(e) => act(() => api.post(`/admin/users/${sel}/role`, { role: e.target.value }), `Role: ${e.target.value}`)}
+                >
+                  {ALL_ROLES.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </label>
             )}
           </div>
         </div>
@@ -519,6 +554,81 @@ function Settings() {
 function Audit() {
   const { data } = useQuery({ queryKey: ['adm-audit'], queryFn: async () => (await api.get('/admin/audit?take=80')).data });
   return <Table rows={data ?? []} cols={['action', 'target', 'when']} render={(a: any) => [a.action, `${a.targetType ?? ''} ${a.targetId ?? ''}`, new Date(a.createdAt).toLocaleString()]} />;
+}
+
+function Roles() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['adm-perms'], queryFn: async () => (await api.get('/admin/permissions')).data });
+  const en = i18n.language?.startsWith('en');
+
+  const registry: any[] = data?.registry ?? [];
+  const managedRoles: string[] = data?.managedRoles ?? [];
+  const roleMap: Record<string, Record<string, boolean>> = {};
+  for (const r of data?.roles ?? []) roleMap[r.role] = r.permissions;
+
+  const groups = Array.from(new Set(registry.map((p) => p.group)));
+
+  const toggle = async (role: string, permission: string, allowed: boolean) => {
+    try {
+      await api.post('/admin/permissions', { role, permission, allowed });
+      qc.invalidateQueries({ queryKey: ['adm-perms'] });
+      qc.invalidateQueries({ queryKey: ['admin-me'] });
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="card p-4 text-sm text-white/55">
+        <Shield size={16} className="mr-1.5 inline text-lav" />
+        Включайте или выключайте отдельные действия для ролей. <b className="text-white/80">ADMIN</b> всегда имеет полный доступ. Назначайте роли пользователям во вкладке <b className="text-white/80">Users</b>.
+      </div>
+      <div className="card overflow-x-auto p-4">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-white/40">
+              <th className="pb-2 font-medium">Право / Permission</th>
+              <th className="pb-2 text-center font-medium text-white/30">ADMIN</th>
+              {managedRoles.map((r) => (
+                <th key={r} className="pb-2 text-center font-medium">{r}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <Fragment key={g}>
+                <tr>
+                  <td colSpan={2 + managedRoles.length} className="pt-3 pb-1 text-xs uppercase tracking-wide text-white/30">{g}</td>
+                </tr>
+                {registry.filter((p) => p.group === g).map((p) => (
+                  <tr key={p.key} className="border-t border-white/5">
+                    <td className="py-2 pr-3">
+                      <div>{en ? p.labelEn : p.labelRu}</div>
+                      <div className="text-xs text-white/30">{p.key}</div>
+                    </td>
+                    <td className="py-2 text-center">
+                      <input type="checkbox" checked readOnly disabled className="opacity-40" />
+                    </td>
+                    {managedRoles.map((role) => (
+                      <td key={role} className="py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!roleMap[role]?.[p.key]}
+                          onChange={(e) => toggle(role, p.key, e.target.checked)}
+                          className="h-4 w-4 cursor-pointer accent-lav"
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function Table({ rows, cols, render }: { rows: any[]; cols: string[]; render: (r: any) => any[] }) {

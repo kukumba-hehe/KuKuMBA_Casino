@@ -6,6 +6,7 @@ import { D } from '../../common/utils/money';
 import { SettingsService } from '../../config/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentsService } from '../payments/payments.service';
+import { PermissionsService } from '../permissions/permissions.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -22,6 +23,7 @@ export class AdminService {
     private settings: SettingsService,
     private notifications: NotificationsService,
     private realtime: RealtimeService,
+    private permissions: PermissionsService,
   ) {}
 
   private audit(actorId: string, action: string, targetType?: string, targetId?: string, meta?: any) {
@@ -95,9 +97,30 @@ export class AdminService {
   }
 
   async setUserRole(adminId: string, id: string, role: UserRole) {
+    if (!Object.values(UserRole).includes(role)) throw new BadRequestException('INVALID_ROLE');
     await this.prisma.user.update({ where: { id }, data: { role } });
     await this.audit(adminId, 'user.role', 'user', id, { role });
     return { ok: true };
+  }
+
+  // ── Roles & permissions (RBAC) ────────────────────────────────────────
+  /** What the current operator is allowed to do — drives the admin SPA. */
+  async operatorContext(user: { id: string; role: UserRole }) {
+    return {
+      role: user.role,
+      isAdmin: user.role === UserRole.ADMIN,
+      permissions: await this.permissions.allowedFor(user.role),
+    };
+  }
+
+  permissionMatrix() {
+    return this.permissions.matrix();
+  }
+
+  async setRolePermission(adminId: string, role: UserRole, permission: string, allowed: boolean) {
+    const res = await this.permissions.setPermission(role, permission, allowed);
+    await this.audit(adminId, 'permission.set', 'role', role, { permission, allowed });
+    return res;
   }
 
   async adjustBalance(

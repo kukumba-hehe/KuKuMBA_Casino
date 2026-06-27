@@ -63,6 +63,28 @@ export function useGameFilters() {
   });
 }
 
+export interface AdminMe {
+  role: string;
+  isAdmin: boolean;
+  permissions: string[];
+}
+
+/** The current operator's role + the capabilities they may use (gates the SPA). */
+export function useAdminMe() {
+  const authed = !!useAuth((s) => s.accessToken);
+  return useQuery<AdminMe>({
+    queryKey: ['admin-me'],
+    enabled: authed,
+    queryFn: async () => (await api.get('/admin/me')).data,
+    staleTime: 60_000,
+  });
+}
+
+/** Convenience: does the operator hold a permission (ADMIN ⇒ always). */
+export function can(me: AdminMe | undefined, perm: string): boolean {
+  return !!me && (me.isAdmin || me.permissions.includes(perm));
+}
+
 export function useCurrencies() {
   return useQuery<Currency[]>({
     queryKey: ['currencies'],

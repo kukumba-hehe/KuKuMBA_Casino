@@ -18,6 +18,7 @@ enum UserRole {
   USER
   PARTNER
   SUPPORT
+  MODERATOR
   ADMIN
 }
 
@@ -782,6 +783,20 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
+}
+
+/// Editable RBAC matrix: which non-admin staff role may perform which capability.
+/// The capability catalog lives in code (permissions.registry.ts); ADMIN always
+/// passes every check and is never stored here.
+model RolePermission {
+  id         String   @id @default(cuid())
+  role       UserRole
+  permission String
+  allowed    Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([role, permission])
+  @@index([role])
 }
 
 /// Atomic counters (e.g. sequential public Account IDs).
