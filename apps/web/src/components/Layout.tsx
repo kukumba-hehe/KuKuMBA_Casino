@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import i18n from '../i18n';
+import { isStaff } from '../lib/roles';
 import api from '../lib/api';
 import { useOnline } from '../lib/hooks';
 import { ADMIN, bottomTabs, desktopTabs, MORE_ITEMS, NavItem } from '../lib/nav';
@@ -54,12 +55,12 @@ function BellLink() {
   return (
     <Link
       to="/notifications"
-      className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl hover:bg-white/5"
+      className="relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/5 text-white/90 transition hover:bg-white/10"
       aria-label="Notifications"
     >
-      <Bell size={19} className="text-white/80" />
+      <Bell size={19} />
       {count > 0 && (
-        <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-bubble px-1 text-[10px] font-bold text-night">
+        <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-bubble px-1 text-[10px] font-bold text-night shadow">
           {count > 9 ? '9+' : count}
         </span>
       )}
@@ -108,7 +109,7 @@ function AccountButton() {
               <Icon size={16} className="text-white/50" /> {label}
             </Link>
           ))}
-          {user?.role === 'ADMIN' && (
+          {isStaff(user?.role) && (
             <Link to="/admin" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-sun hover:bg-white/5">
               <Shield size={16} /> Admin
             </Link>
@@ -180,7 +181,7 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, clear } = useAuth();
   const authed = !!user;
   const navigate = useNavigate();
-  const items = [...MORE_ITEMS, ...(user?.role === 'ADMIN' ? [ADMIN] : [])];
+  const items = [...MORE_ITEMS, ...(isStaff(user?.role) ? [ADMIN] : [])];
   const logout = async () => {
     try {
       await api.post('/auth/logout', { refreshToken: useAuth.getState().refreshToken });
@@ -351,37 +352,47 @@ function Footer() {
     refetchInterval: 30_000,
   });
   return (
-    <footer className="mt-10 border-t border-white/10 bg-black/20">
-      {/* live trust strip — moved here from the header */}
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-6 gap-y-2 px-4 py-4 text-sm text-white/60">
-        <span className="flex items-center gap-2">
+    <footer className="mt-8 border-t border-white/10 bg-black/20">
+      {/* live trust strip */}
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-5 gap-y-1.5 px-4 py-3 text-xs text-white/60 sm:text-sm">
+        <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-mint shadow-glow-mint" />
           {Math.max(online.sockets, 1)} {t('common.online')}
         </span>
         <span>{stats?.players ?? 0} {t('common.players')}</span>
         <span>{stats?.totalRounds ?? 0} {t('lobby.rounds')}</span>
-        <span className="text-white/40">RTP 99% · Provably-fair · 18+</span>
+        <span className="text-white/40">Provably-fair · 18+</span>
       </div>
 
-      <div className="mx-auto grid max-w-7xl gap-8 border-t border-white/10 px-4 py-10 sm:grid-cols-2 lg:grid-cols-4">
+      {/* full link columns — desktop/tablet only (mobile uses the More sheet) */}
+      <div className="mx-auto hidden max-w-7xl gap-8 border-t border-white/10 px-4 py-8 sm:grid sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo />
           <p className="mt-3 max-w-xs text-sm text-white/50">{t('brand.tagline')}. Играйте ответственно.</p>
         </div>
-        <FooterCol title={t('nav.lobby')} links={[['/', t('nav.lobby')], ['/roulette', t('nav.roulette')], ['/raffles', t('nav.raffles')], ['/bonuses', t('nav.bonuses')]]} />
+        <FooterCol title={t('nav.lobby')} links={[['/', t('nav.lobby')], ['/games', t('nav.games')], ['/roulette', t('nav.roulette')], ['/bonuses', t('nav.bonuses')]]} />
         <FooterCol title={t('nav.profile')} links={[['/wallet', t('nav.wallet')], ['/profile', t('nav.profile')], ['/notifications', t('nav.notifications')], ['/support', t('nav.support')]]} />
         <FooterCol
           title="Инфо / Info"
           links={[
             ['/page/about', t('nav.about')],
             ['/page/responsible-gaming', t('nav.responsible')],
-            ['/page/private-game', 'Приватная игра'],
             ['/page/contacts', t('nav.contacts')],
             ['/page/terms', 'Условия / Terms'],
           ]}
         />
       </div>
-      <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-white/40">
+
+      {/* compact link row — mobile only */}
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-t border-white/10 px-4 py-3 text-xs text-white/50 sm:hidden">
+        <Link to="/games" className="hover:text-white">{t('nav.games')}</Link>
+        <Link to="/bonuses" className="hover:text-white">{t('nav.bonuses')}</Link>
+        <Link to="/page/responsible-gaming" className="hover:text-white">{t('nav.responsible')}</Link>
+        <Link to="/page/about" className="hover:text-white">{t('nav.about')}</Link>
+        <Link to="/support" className="hover:text-white">{t('nav.support')}</Link>
+      </div>
+
+      <div className="border-t border-white/10 px-4 py-3 text-center text-[11px] text-white/40">
         © {new Date().getFullYear()} KuKuMBA · Demo &amp; Real
       </div>
     </footer>

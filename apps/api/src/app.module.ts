@@ -4,9 +4,11 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SettingsModule } from './config/settings.module';
+import { PermissionsModule } from './modules/permissions/permissions.module';
 
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -37,6 +39,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
 
     // platform / global services
     PrismaModule,
+    PermissionsModule,
     SettingsModule,
     RealtimeModule,
     NotificationsModule,
@@ -65,6 +68,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}

@@ -1,11 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, UserRole, UserStatus } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { genPromoCode } from '../../common/utils/ids';
 import { D } from '../../common/utils/money';
 import { SettingsService } from '../../config/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentsService } from '../payments/payments.service';
+import { PermissionsService } from '../permissions/permissions.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -22,6 +25,7 @@ export class AdminService {
     private settings: SettingsService,
     private notifications: NotificationsService,
     private realtime: RealtimeService,
+    private permissions: PermissionsService,
   ) {}
 
   private audit(actorId: string, action: string, targetType?: string, targetId?: string, meta?: any) {
@@ -88,16 +92,133 @@ export class AdminService {
     return safe;
   }
 
-  async setUserStatus(adminId: string, id: string, status: UserStatus) {
+  async setUserStatus(adminId: string, id: string, status: UserStatus, reason?: string) {
     await this.prisma.user.update({ where: { id }, data: { status } });
-    await this.audit(adminId, 'user.status', 'user', id, { status });
+    if (status === 'BANNED' || status === 'SUSPENDED') {
+      // force the account offline immediately
+      await this.prisma.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+    }
+    await this.audit(adminId, 'user.status', 'user', id, { status, reason });
+    await this.notifications.notify(id, {
+      type: 'SYSTEM',
+      titleRu: status === 'BANNED' ? 'Аккаунт заблокирован' : status === 'ACTIVE' ? 'Аккаунт восстановлен' : 'Статус аккаунта изменён',
+      titleEn: status === 'BANNED' ? 'Account banned' : status === 'ACTIVE' ? 'Account restored' : 'Account status changed',
+      bodyRu: reason ? `Причина: ${reason}` : `Новый статус: ${status}.`,
+      bodyEn: reason ? `Reason: ${reason}` : `New status: ${status}.`,
+    });
     return { ok: true };
   }
 
+  // ── Expanded user tools ───────────────────────────────────────────────
+  async notifyUser(adminId: string, userId: string, dto: { titleRu: string; titleEn: string; bodyRu?: string; bodyEn?: string }) {
+    if (!dto.titleRu || !dto.titleEn) throw new BadRequestException('TITLE_REQUIRED');
+    await this.notifications.notify(userId, {
+      type: 'SYSTEM',
+      titleRu: dto.titleRu,
+      titleEn: dto.titleEn,
+      bodyRu: dto.bodyRu ?? '',
+      bodyEn: dto.bodyEn ?? '',
+    });
+    await this.audit(adminId, 'user.notify', 'user', userId, { titleRu: dto.titleRu });
+    return { ok: true };
+  }
+
+  /** Set a new password (random if omitted). Revokes sessions and returns the value once. */
+  async resetUserPassword(adminId: string, userId: string, newPassword?: string) {
+    const password = newPassword && newPassword.length >= 6 ? newPassword : randomBytes(6).toString('base64url');
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(password, 10) } });
+    await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await this.audit(adminId, 'user.password_reset', 'user', userId);
+    await this.notifications.notify(userId, {
+      type: 'SYSTEM',
+      titleRu: 'Пароль сброшен',
+      titleEn: 'Password reset',
+      bodyRu: 'Администратор сбросил ваш пароль. Войдите с новым паролем.',
+      bodyEn: 'An admin reset your password. Sign in with the new one.',
+    });
+    return { password };
+  }
+
+  async updateUserAccount(adminId: string, userId: string, dto: { email?: string; username?: string; emailVerified?: boolean }) {
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.email !== undefined) data.email = dto.email.trim().toLowerCase();
+    if (dto.username !== undefined) data.username = dto.username.trim();
+    if (dto.emailVerified !== undefined) data.emailVerified = dto.emailVerified;
+    if (Object.keys(data).length === 0) return { ok: true };
+    try {
+      await this.prisma.user.update({ where: { id: userId }, data });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new BadRequestException('EMAIL_OR_USERNAME_TAKEN');
+      }
+      throw e;
+    }
+    await this.audit(adminId, 'user.edit', 'user', userId, { ...data });
+    return { ok: true };
+  }
+
+  async listSessions(userId: string) {
+    const sessions = await this.prisma.session.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { id: true, userAgent: true, ip: true, createdAt: true, lastUsedAt: true, expiresAt: true, revokedAt: true },
+    });
+    return sessions.map((s) => ({ ...s, active: !s.revokedAt && s.expiresAt > new Date() }));
+  }
+
+  async revokeSessions(adminId: string, userId: string) {
+    const res = await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await this.audit(adminId, 'user.revoke_sessions', 'user', userId, { count: res.count });
+    return { ok: true, count: res.count };
+  }
+
+  async userBets(userId: string, take = 25) {
+    const bets = await this.prisma.bet.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(take, 100),
+      include: { round: { select: { outcome: true, outcomeColor: true } } },
+    });
+    return bets.map((b) => ({
+      id: b.id,
+      betType: b.betType,
+      stake: b.stake.toFixed(),
+      payout: b.payout.toFixed(),
+      currency: b.currency,
+      mode: b.mode,
+      status: b.status,
+      outcome: b.round?.outcome,
+      color: b.round?.outcomeColor,
+      createdAt: b.createdAt,
+    }));
+  }
+
   async setUserRole(adminId: string, id: string, role: UserRole) {
+    if (!Object.values(UserRole).includes(role)) throw new BadRequestException('INVALID_ROLE');
     await this.prisma.user.update({ where: { id }, data: { role } });
     await this.audit(adminId, 'user.role', 'user', id, { role });
     return { ok: true };
+  }
+
+  // ── Roles & permissions (RBAC) ────────────────────────────────────────
+  /** What the current operator is allowed to do — drives the admin SPA. */
+  async operatorContext(user: { id: string; role: UserRole }) {
+    return {
+      role: user.role,
+      isAdmin: user.role === UserRole.ADMIN,
+      permissions: await this.permissions.allowedFor(user.role),
+    };
+  }
+
+  permissionMatrix() {
+    return this.permissions.matrix();
+  }
+
+  async setRolePermission(adminId: string, role: UserRole, permission: string, allowed: boolean) {
+    const res = await this.permissions.setPermission(role, permission, allowed);
+    await this.audit(adminId, 'permission.set', 'role', role, { permission, allowed });
+    return res;
   }
 
   async adjustBalance(
@@ -255,6 +376,48 @@ export class AdminService {
     return bonus;
   }
 
+  // ── Games (catalog CRUD) ──────────────────────────────────────────────
+  listGames() {
+    return this.prisma.game.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] });
+  }
+
+  async upsertGame(adminId: string, dto: any) {
+    if (!dto.key) throw new BadRequestException('KEY_REQUIRED');
+    const data = {
+      name: dto.name ?? dto.key,
+      type: dto.type ?? 'slots',
+      category: dto.category ?? 'SLOTS',
+      provider: dto.provider ?? 'KuKuMBA Originals',
+      status: dto.status === 'COMING_SOON' ? 'COMING_SOON' : 'LIVE',
+      route: dto.route || null,
+      rtp: dto.rtp !== undefined && dto.rtp !== '' ? Number(dto.rtp) : 0.97,
+      minBet: D(dto.minBet ?? 0.1),
+      maxBet: D(dto.maxBet ?? 100000),
+      descriptionRu: dto.descriptionRu ?? null,
+      descriptionEn: dto.descriptionEn ?? null,
+      thumbnail: dto.thumbnail || null,
+      sortOrder: dto.sortOrder !== undefined ? Number(dto.sortOrder) : 0,
+      enabled: dto.enabled ?? true,
+    };
+    const game = await this.prisma.game.upsert({
+      where: { key: dto.key },
+      create: { key: dto.key, ...data },
+      update: data,
+    });
+    await this.audit(adminId, 'game.upsert', 'game', game.id, { key: dto.key });
+    return game;
+  }
+
+  async deleteGame(adminId: string, key: string) {
+    const game = await this.prisma.game.findUnique({ where: { key } });
+    if (!game) throw new NotFoundException('GAME_NOT_FOUND');
+    const rounds = await this.prisma.gameRound.count({ where: { gameId: game.id } });
+    if (rounds > 0) throw new BadRequestException('GAME_HAS_HISTORY_DISABLE_INSTEAD');
+    await this.prisma.game.delete({ where: { key } });
+    await this.audit(adminId, 'game.delete', 'game', game.id, { key });
+    return { ok: true };
+  }
+
   // ── Currencies ────────────────────────────────────────────────
   listCurrencies() {
     return this.prisma.currency.findMany({ orderBy: { sortOrder: 'asc' } });
@@ -321,7 +484,44 @@ export class AdminService {
   async deleteChatMessage(adminId: string, id: string) {
     await this.prisma.chatMessage.update({ where: { id }, data: { deleted: true } });
     await this.audit(adminId, 'chat.delete', 'chat', id);
+    this.realtime.emit('chat:deleted', { id });
     return { ok: true };
+  }
+
+  /** Recent chat messages (incl. deleted) with the author's id/accountId for moderation. */
+  async listChat(room = 'global', take = 80) {
+    const msgs = await this.prisma.chatMessage.findMany({
+      where: { room },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(take, 200),
+      include: { user: { select: { accountId: true, chatMutedUntil: true } } },
+    });
+    return msgs.map((m) => ({
+      id: m.id,
+      room: m.room,
+      userId: m.userId,
+      accountId: m.user?.accountId,
+      username: m.username,
+      body: m.body,
+      deleted: m.deleted,
+      createdAt: m.createdAt,
+      mutedUntil: m.user?.chatMutedUntil,
+    }));
+  }
+
+  /** Mute a user in chat for N minutes (0 ⇒ unmute). */
+  async muteUser(adminId: string, userId: string, minutes: number) {
+    const until = minutes > 0 ? new Date(Date.now() + minutes * 60_000) : null;
+    await this.prisma.user.update({ where: { id: userId }, data: { chatMutedUntil: until } });
+    await this.audit(adminId, until ? 'chat.mute' : 'chat.unmute', 'user', userId, { minutes });
+    await this.notifications.notify(userId, {
+      type: 'SYSTEM',
+      titleRu: until ? 'Чат ограничен' : 'Чат снова доступен',
+      titleEn: until ? 'Chat restricted' : 'Chat restored',
+      bodyRu: until ? `Вы не можете писать в чат до ${until.toLocaleString('ru')}.` : 'Ограничение чата снято.',
+      bodyEn: until ? `You cannot post in chat until ${until.toISOString()}.` : 'Your chat restriction was lifted.',
+    });
+    return { ok: true, mutedUntil: until };
   }
 
   /**

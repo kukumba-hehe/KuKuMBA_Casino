@@ -21,6 +21,70 @@ export interface Balance {
   locked: string;
 }
 
+export interface Game {
+  key: string;
+  name: string;
+  type: string;
+  category: string;
+  provider: string;
+  status: 'LIVE' | 'COMING_SOON';
+  route: string | null;
+  rtp: number;
+  rtpPercent: number;
+  thumbnail: string | null;
+  descriptionRu?: string | null;
+  descriptionEn?: string | null;
+}
+
+export interface GameFilters {
+  categories: { key: string; count: number }[];
+  providers: { key: string; count: number }[];
+}
+
+/** Catalog list, optionally filtered. Pass an empty object for everything. */
+export function useGames(filter: { category?: string; provider?: string; q?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filter.category && filter.category !== 'ALL') params.set('category', filter.category);
+  if (filter.provider && filter.provider !== 'ALL') params.set('provider', filter.provider);
+  if (filter.q?.trim()) params.set('q', filter.q.trim());
+  const qs = params.toString();
+  return useQuery<Game[]>({
+    queryKey: ['games', filter.category ?? 'ALL', filter.provider ?? 'ALL', filter.q ?? ''],
+    queryFn: async () => (await api.get(`/games${qs ? `?${qs}` : ''}`)).data,
+    staleTime: 30_000,
+  });
+}
+
+export function useGameFilters() {
+  return useQuery<GameFilters>({
+    queryKey: ['game-filters'],
+    queryFn: async () => (await api.get('/games/filters')).data,
+    staleTime: 60_000,
+  });
+}
+
+export interface AdminMe {
+  role: string;
+  isAdmin: boolean;
+  permissions: string[];
+}
+
+/** The current operator's role + the capabilities they may use (gates the SPA). */
+export function useAdminMe() {
+  const authed = !!useAuth((s) => s.accessToken);
+  return useQuery<AdminMe>({
+    queryKey: ['admin-me'],
+    enabled: authed,
+    queryFn: async () => (await api.get('/admin/me')).data,
+    staleTime: 60_000,
+  });
+}
+
+/** Convenience: does the operator hold a permission (ADMIN ⇒ always). */
+export function can(me: AdminMe | undefined, perm: string): boolean {
+  return !!me && (me.isAdmin || me.permissions.includes(perm));
+}
+
 export function useCurrencies() {
   return useQuery<Currency[]>({
     queryKey: ['currencies'],

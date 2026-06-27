@@ -5,75 +5,96 @@ import {
   Check,
   Coins,
   FileText,
+  Gamepad2,
   Gift,
   LayoutDashboard,
   LifeBuoy,
   Megaphone,
+  MessagesSquare,
   PartyPopper,
   Receipt,
   ScrollText,
   Settings as SettingsIcon,
+  Shield,
   ShieldCheck,
   Tag,
   Users as UsersIcon,
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import api, { apiError } from '../lib/api';
-import { fmt } from '../lib/hooks';
+import { can, fmt, useAdminMe, type AdminMe } from '../lib/hooks';
 import { toast } from '../store/toast';
 
-const TABS: { key: string; label: string; icon: LucideIcon }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'users', label: 'Users', icon: UsersIcon },
-  { key: 'deposits', label: 'Deposits', icon: ArrowDownToLine },
-  { key: 'withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine },
-  { key: 'promo', label: 'Promo', icon: Tag },
-  { key: 'bonuses', label: 'Bonuses', icon: Gift },
-  { key: 'raffles', label: 'Raffles', icon: PartyPopper },
-  { key: 'currencies', label: 'Currencies', icon: Coins },
-  { key: 'broadcast', label: 'Broadcast', icon: Megaphone },
-  { key: 'tickets', label: 'Tickets', icon: LifeBuoy },
-  { key: 'transactions', label: 'Transactions', icon: Receipt },
-  { key: 'content', label: 'Content', icon: FileText },
-  { key: 'settings', label: 'Settings', icon: SettingsIcon },
-  { key: 'audit', label: 'Audit', icon: ScrollText },
+// Each tab declares the permission that unlocks it (ADMIN sees all).
+const TABS: { key: string; label: string; icon: LucideIcon; perm: string }[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard.view' },
+  { key: 'users', label: 'Users', icon: UsersIcon, perm: 'users.view' },
+  { key: 'roles', label: 'Roles', icon: Shield, perm: 'roles.manage' },
+  { key: 'deposits', label: 'Deposits', icon: ArrowDownToLine, perm: 'deposits.manage' },
+  { key: 'withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine, perm: 'withdrawals.manage' },
+  { key: 'promo', label: 'Promo', icon: Tag, perm: 'promo.manage' },
+  { key: 'games', label: 'Games', icon: Gamepad2, perm: 'games.manage' },
+  { key: 'bonuses', label: 'Bonuses', icon: Gift, perm: 'bonuses.manage' },
+  { key: 'raffles', label: 'Raffles', icon: PartyPopper, perm: 'raffles.manage' },
+  { key: 'currencies', label: 'Currencies', icon: Coins, perm: 'currencies.manage' },
+  { key: 'broadcast', label: 'Broadcast', icon: Megaphone, perm: 'notifications.send' },
+  { key: 'tickets', label: 'Tickets', icon: LifeBuoy, perm: 'tickets.manage' },
+  { key: 'chat', label: 'Chat', icon: MessagesSquare, perm: 'chat.moderate' },
+  { key: 'transactions', label: 'Transactions', icon: Receipt, perm: 'transactions.view' },
+  { key: 'content', label: 'Content', icon: FileText, perm: 'content.manage' },
+  { key: 'settings', label: 'Settings', icon: SettingsIcon, perm: 'settings.manage' },
+  { key: 'audit', label: 'Audit', icon: ScrollText, perm: 'audit.view' },
 ];
 
 export default function AdminPage() {
+  const { data: me } = useAdminMe();
+  const visible = useMemo(() => TABS.filter((t) => can(me, t.perm)), [me]);
   const [tab, setTab] = useState('dashboard');
+  // Fall back to the first tab the operator can actually see.
+  const active = visible.some((t) => t.key === tab) ? tab : visible[0]?.key;
+
+  if (!me) return <div className="card p-6 text-center text-white/50">{i18n.t('common.loading')}</div>;
+  if (visible.length === 0)
+    return <div className="card p-6 text-center text-white/50">No permissions assigned to your role yet.</div>;
+
   return (
     <div className="space-y-5">
       <h1 className="flex items-center gap-2 text-2xl font-extrabold">
         <ShieldCheck size={24} className="text-lav" /> Admin · KuKuMBA
+        <span className="chip ml-1 text-xs">{me.role}</span>
       </h1>
       <div className="flex flex-wrap gap-1.5">
-        {TABS.map(({ key, label, icon: Icon }) => (
+        {visible.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm transition ${tab === key ? 'bg-white/15 text-white' : 'bg-white/5 text-white/60 hover:text-white'}`}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm transition ${active === key ? 'bg-white/15 text-white' : 'bg-white/5 text-white/60 hover:text-white'}`}
           >
             <Icon size={15} /> {label}
           </button>
         ))}
       </div>
-      {tab === 'dashboard' && <Dashboard />}
-      {tab === 'users' && <Users />}
-      {tab === 'deposits' && <Deposits />}
-      {tab === 'withdrawals' && <Withdrawals />}
-      {tab === 'promo' && <Promo />}
-      {tab === 'bonuses' && <Bonuses />}
-      {tab === 'raffles' && <RafflesAdmin />}
-      {tab === 'currencies' && <Currencies />}
-      {tab === 'broadcast' && <Broadcast />}
-      {tab === 'tickets' && <Tickets />}
-      {tab === 'transactions' && <Transactions />}
-      {tab === 'content' && <Content />}
-      {tab === 'settings' && <Settings />}
-      {tab === 'audit' && <Audit />}
+      {active === 'dashboard' && <Dashboard />}
+      {active === 'users' && <Users me={me} />}
+      {active === 'roles' && <Roles />}
+      {active === 'games' && <GamesAdmin />}
+      {active === 'deposits' && <Deposits />}
+      {active === 'withdrawals' && <Withdrawals />}
+      {active === 'promo' && <Promo />}
+      {active === 'bonuses' && <Bonuses />}
+      {active === 'raffles' && <RafflesAdmin />}
+      {active === 'currencies' && <Currencies />}
+      {active === 'broadcast' && <Broadcast />}
+      {active === 'tickets' && <Tickets />}
+      {active === 'chat' && <ChatAdmin />}
+      {active === 'transactions' && <Transactions />}
+      {active === 'content' && <Content />}
+      {active === 'settings' && <Settings />}
+      {active === 'audit' && <Audit />}
     </div>
   );
 }
@@ -101,26 +122,18 @@ function Dashboard() {
   );
 }
 
-function Users() {
+const ALL_ROLES = ['USER', 'PARTNER', 'SUPPORT', 'MODERATOR', 'ADMIN'];
+
+function Users({ me }: { me: AdminMe }) {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<string | null>(null);
   const { data } = useQuery({ queryKey: ['adm-users', q], queryFn: async () => (await api.get(`/admin/users?q=${encodeURIComponent(q)}`)).data });
   const { data: user } = useQuery({ queryKey: ['adm-user', sel], enabled: !!sel, queryFn: async () => (await api.get(`/admin/users/${sel}`)).data });
 
-  const [amount, setAmount] = useState('100');
-  const [currency, setCurrency] = useState('DEMO');
-  const [mode, setMode] = useState('DEMO');
-
-  const act = async (fn: () => Promise<any>, ok = 'Done') => {
-    try {
-      await fn();
-      qc.invalidateQueries({ queryKey: ['adm-user', sel] });
-      qc.invalidateQueries({ queryKey: ['adm-users', q] });
-      toast.success(ok);
-    } catch (e) {
-      toast.error(apiError(e));
-    }
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['adm-user', sel] });
+    qc.invalidateQueries({ queryKey: ['adm-users', q] });
   };
 
   return (
@@ -138,46 +151,151 @@ function Users() {
         </div>
       </div>
 
-      {user && (
-        <div className="card space-y-3 p-4">
-          <div className="font-bold">{user.username} · #{user.accountId}</div>
-          <div className="text-sm text-white/50">{user.email} · VIP {user.vipLevel} · KYC {user.kycStatus}</div>
-          <div className="flex flex-wrap gap-1.5 text-sm">
-            {(user.balances ?? []).map((b: any) => (
-              <span key={b.currency + b.mode} className="chip">{fmt(b.amount, 4)} {b.currency} ({b.mode})</span>
-            ))}
+      {user && <UserDetail key={user.id} user={user} me={me} refresh={refresh} />}
+    </div>
+  );
+}
+
+function UserDetail({ user, me, refresh }: { user: any; me: AdminMe; refresh: () => void }) {
+  const id = user.id;
+  const [amount, setAmount] = useState('100');
+  const [currency, setCurrency] = useState('DEMO');
+  const [mode, setMode] = useState('DEMO');
+  const [banReason, setBanReason] = useState('');
+  const [email, setEmail] = useState(user.email ?? '');
+  const [username, setUsername] = useState(user.username ?? '');
+  const [notif, setNotif] = useState({ titleRu: '', titleEn: '', bodyRu: '', bodyEn: '' });
+  const [showBets, setShowBets] = useState(false);
+
+  const { data: bets } = useQuery({ queryKey: ['adm-user-bets', id], enabled: showBets, queryFn: async () => (await api.get(`/admin/users/${id}/bets?take=25`)).data });
+  const { data: sessions } = useQuery({ queryKey: ['adm-user-sessions', id], enabled: can(me, 'users.edit'), queryFn: async () => (await api.get(`/admin/users/${id}/sessions`)).data });
+
+  const act = async (fn: () => Promise<any>, ok = 'Done') => {
+    try { await fn(); refresh(); toast.success(ok); } catch (e) { toast.error(apiError(e)); }
+  };
+  const muted = user.chatMutedUntil && new Date(user.chatMutedUntil) > new Date();
+
+  return (
+    <div className="card space-y-3 p-4">
+      <div className="font-bold">{user.username} · #{user.accountId} <span className="chip ml-1 text-xs">{user.role}</span></div>
+      <div className="text-sm text-white/50">
+        {user.email}{user.emailVerified ? ' ✓' : ' (unverified)'} · VIP {user.vipLevel} · KYC {user.kycStatus} · {user.status}
+        {muted && <span className="ml-1 text-roul-red">· muted</span>}
+      </div>
+      <div className="flex flex-wrap gap-1.5 text-sm">
+        {(user.balances ?? []).map((b: any) => (
+          <span key={b.currency + b.mode} className="chip">{fmt(b.amount, 4)} {b.currency} ({b.mode})</span>
+        ))}
+      </div>
+
+      {can(me, 'users.balance') && (
+        <div className="space-y-2 rounded-xl bg-black/30 p-3">
+          <div className="text-xs text-white/40">Balance adjustment</div>
+          <div className="grid grid-cols-3 gap-2">
+            <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <input className="input" value={currency} onChange={(e) => setCurrency(e.target.value)} />
+            <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option>DEMO</option>
+              <option>REAL</option>
+            </select>
           </div>
-          <div className="space-y-2 rounded-xl bg-black/30 p-3">
-            <div className="text-xs text-white/40">Balance adjustment</div>
-            <div className="grid grid-cols-3 gap-2">
-              <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-              <input className="input" value={currency} onChange={(e) => setCurrency(e.target.value)} />
-              <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
-                <option>DEMO</option>
-                <option>REAL</option>
-              </select>
-            </div>
-            <button onClick={() => act(() => api.post('/admin/balance/adjust', { userId: sel, currency, mode, amount }), 'Balance updated')} className="btn-soft w-full text-sm">
-              Apply
-            </button>
+          <button onClick={() => act(() => api.post('/admin/balance/adjust', { userId: id, currency, mode, amount }), 'Balance updated')} className="btn-soft w-full text-sm">Apply</button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {can(me, 'kyc.review') && (
+          <>
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/kyc`, { approve: true }), 'KYC approved')} className="btn-ghost inline-flex items-center gap-1 text-sm text-mint"><Check size={14} /> KYC</button>
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/kyc`, { approve: false, note: 'rejected' }), 'KYC rejected')} className="btn-ghost inline-flex items-center gap-1 text-sm"><X size={14} /> KYC</button>
+          </>
+        )}
+        {can(me, 'users.vip') && (
+          <button onClick={() => act(() => api.post(`/admin/users/${id}/vip`, { level: (user.vipLevel ?? 0) + 1 }), 'VIP +1')} className="btn-ghost text-sm">VIP +1</button>
+        )}
+        {can(me, 'chat.moderate') && (
+          muted ? (
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/mute`, { minutes: 0 }), 'Unmuted')} className="btn-ghost text-sm text-mint">Unmute</button>
+          ) : (
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/mute`, { minutes: 60 }), 'Muted 60m')} className="btn-ghost text-sm">Mute 60m</button>
+          )
+        )}
+        {can(me, 'users.role') && (
+          <label className="inline-flex items-center gap-1.5 text-sm text-white/50">
+            Role
+            <select className="input !py-1.5 !w-32" value={user.role} onChange={(e) => act(() => api.post(`/admin/users/${id}/role`, { role: e.target.value }), `Role: ${e.target.value}`)}>
+              {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+
+      {can(me, 'users.ban') && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-black/30 p-3">
+          {user.status === 'BANNED' ? (
+            <button onClick={() => act(() => api.post(`/admin/users/${id}/status`, { status: 'ACTIVE' }), 'Unbanned')} className="btn-ghost text-sm text-mint">Unban</button>
+          ) : (
+            <>
+              <input className="input flex-1 !py-1.5" placeholder="Ban reason (optional)" value={banReason} onChange={(e) => setBanReason(e.target.value)} />
+              <button onClick={() => act(() => api.post(`/admin/users/${id}/status`, { status: 'BANNED', reason: banReason }), 'Banned')} className="btn-ghost text-sm text-roul-red">Ban</button>
+            </>
+          )}
+        </div>
+      )}
+
+      {can(me, 'users.edit') && (
+        <div className="space-y-2 rounded-xl bg-black/30 p-3">
+          <div className="text-xs text-white/40">Account</div>
+          <div className="flex flex-wrap gap-2">
+            <input className="input flex-1 !py-1.5" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" />
+            <input className="input flex-1 !py-1.5" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" />
           </div>
           <div className="flex flex-wrap gap-2">
-            {user.status === 'BANNED' ? (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/status`, { status: 'ACTIVE' }), 'Unbanned')} className="btn-ghost text-sm text-mint">Unban</button>
-            ) : (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/status`, { status: 'BANNED' }), 'Banned')} className="btn-ghost text-sm text-roul-red">Ban</button>
-            )}
-            <button onClick={() => act(() => api.post(`/admin/users/${sel}/kyc`, { approve: true }), 'KYC approved')} className="btn-ghost inline-flex items-center gap-1 text-sm text-mint"><Check size={14} /> KYC</button>
-            <button onClick={() => act(() => api.post(`/admin/users/${sel}/kyc`, { approve: false, note: 'rejected' }), 'KYC rejected')} className="btn-ghost inline-flex items-center gap-1 text-sm"><X size={14} /> KYC</button>
-            <button onClick={() => act(() => api.post(`/admin/users/${sel}/vip`, { level: (user.vipLevel ?? 0) + 1 }), 'VIP +1')} className="btn-ghost text-sm">VIP +1</button>
-            {user.role === 'ADMIN' ? (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/role`, { role: 'USER' }), 'Role: user')} className="btn-ghost text-sm">Make user</button>
-            ) : (
-              <button onClick={() => act(() => api.post(`/admin/users/${sel}/role`, { role: 'ADMIN' }), 'Role: admin')} className="btn-ghost text-sm text-lav">Make admin</button>
+            <button onClick={() => act(() => api.patch(`/admin/users/${id}`, { email, username }), 'Saved')} className="btn-soft text-sm">Save</button>
+            <button onClick={() => act(() => api.patch(`/admin/users/${id}`, { emailVerified: true }), 'Email verified')} className="btn-ghost text-sm">Verify email</button>
+            <button
+              onClick={() => act(async () => { const { data } = await api.post(`/admin/users/${id}/reset-password`, {}); window.prompt('New password (copy it):', data.password); }, 'Password reset')}
+              className="btn-ghost text-sm"
+            >Reset password</button>
+            {sessions && (
+              <button onClick={() => act(() => api.post(`/admin/users/${id}/revoke-sessions`, {}), 'Sessions revoked')} className="btn-ghost text-sm">
+                Revoke sessions ({(sessions ?? []).filter((s: any) => s.active).length})
+              </button>
             )}
           </div>
         </div>
       )}
+
+      {can(me, 'notifications.send') && (
+        <div className="space-y-2 rounded-xl bg-black/30 p-3">
+          <div className="text-xs text-white/40">Send notification</div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input className="input !py-1.5" placeholder="Заголовок (RU)" value={notif.titleRu} onChange={(e) => setNotif({ ...notif, titleRu: e.target.value })} />
+            <input className="input !py-1.5" placeholder="Title (EN)" value={notif.titleEn} onChange={(e) => setNotif({ ...notif, titleEn: e.target.value })} />
+            <input className="input !py-1.5" placeholder="Текст (RU)" value={notif.bodyRu} onChange={(e) => setNotif({ ...notif, bodyRu: e.target.value })} />
+            <input className="input !py-1.5" placeholder="Body (EN)" value={notif.bodyEn} onChange={(e) => setNotif({ ...notif, bodyEn: e.target.value })} />
+          </div>
+          <button
+            onClick={() => act(async () => { await api.post(`/admin/users/${id}/notify`, notif); setNotif({ titleRu: '', titleEn: '', bodyRu: '', bodyEn: '' }); }, 'Sent')}
+            className="btn-soft text-sm" disabled={!notif.titleRu || !notif.titleEn}
+          >Send</button>
+        </div>
+      )}
+
+      <div>
+        <button onClick={() => setShowBets((s) => !s)} className="text-sm text-lav hover:underline">{showBets ? 'Hide' : 'Show'} recent bets</button>
+        {showBets && (
+          <div className="mt-2 max-h-60 space-y-1 overflow-y-auto text-xs">
+            {(bets ?? []).map((b: any) => (
+              <div key={b.id} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-2.5 py-1.5">
+                <span>{b.betType} · {b.outcome}</span>
+                <span className={Number(b.payout) > 0 ? 'text-mint' : 'text-white/40'}>{Number(b.payout) > 0 ? `+${fmt(b.payout, 2)}` : `−${fmt(b.stake, 2)}`} {b.currency}</span>
+              </div>
+            ))}
+            {(bets ?? []).length === 0 && <div className="py-2 text-center text-white/30">—</div>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -484,7 +602,7 @@ function Settings() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['adm-set'], queryFn: async () => (await api.get('/admin/settings')).data });
   const [key, setKey] = useState('game.rtp');
-  const [value, setValue] = useState('0.99');
+  const [value, setValue] = useState('0.973');
   const save = async (k = key, raw = value) => {
     let v: any = raw;
     try { v = JSON.parse(raw); } catch { /* keep string */ }
@@ -502,7 +620,7 @@ function Settings() {
       <div className="card flex flex-wrap items-end gap-3 p-4">
         <div>
           <label className="label">Roulette RTP (0–1)</label>
-          <input className="input w-40" type="number" step="0.001" min="0.5" max="1" defaultValue={rtp?.value ?? 0.99} onBlur={(e) => save('game.rtp', e.target.value)} />
+          <input className="input w-40" type="number" step="0.001" min="0.5" max="1" defaultValue={rtp?.value ?? 0.973} onBlur={(e) => save('game.rtp', e.target.value)} />
         </div>
         <p className="text-xs text-white/40">Edit any setting below; values are parsed as JSON when possible.</p>
       </div>
@@ -519,6 +637,200 @@ function Settings() {
 function Audit() {
   const { data } = useQuery({ queryKey: ['adm-audit'], queryFn: async () => (await api.get('/admin/audit?take=80')).data });
   return <Table rows={data ?? []} cols={['action', 'target', 'when']} render={(a: any) => [a.action, `${a.targetType ?? ''} ${a.targetId ?? ''}`, new Date(a.createdAt).toLocaleString()]} />;
+}
+
+const GAME_CATEGORIES = ['ROULETTE', 'SLOTS', 'LIVE', 'MINIGAME'];
+const EMPTY_GAME = {
+  key: '', name: '', type: 'slots', category: 'SLOTS', provider: '', status: 'COMING_SOON',
+  route: '', rtp: '0.96', sortOrder: '10', enabled: true, descriptionRu: '', descriptionEn: '',
+};
+
+function GamesAdmin() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['adm-games'], queryFn: async () => (await api.get('/admin/games')).data });
+  const [form, setForm] = useState<any>(EMPTY_GAME);
+  const set = (patch: any) => setForm((f: any) => ({ ...f, ...patch }));
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['adm-games'] });
+    qc.invalidateQueries({ queryKey: ['games'] });
+    qc.invalidateQueries({ queryKey: ['game-filters'] });
+  };
+  const save = async () => {
+    try {
+      await api.post('/admin/games', { ...form, rtp: Number(form.rtp), sortOrder: Number(form.sortOrder) });
+      refresh();
+      toast.success('Game saved');
+      setForm(EMPTY_GAME);
+    } catch (e) { toast.error(apiError(e)); }
+  };
+  const toggle = async (g: any) => {
+    try { await api.post('/admin/games', { ...g, enabled: !g.enabled }); refresh(); } catch (e) { toast.error(apiError(e)); }
+  };
+  const del = async (key: string) => {
+    if (!confirm(`Delete game "${key}"?`)) return;
+    try { await api.delete(`/admin/games/${key}`); refresh(); toast.success('Deleted'); } catch (e) { toast.error(apiError(e)); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="card space-y-2 p-4">
+        <div className="text-sm font-semibold text-white/70">{form.key ? `Edit / create` : 'Create'} game</div>
+        <div className="flex flex-wrap gap-2">
+          <input className="input w-36" placeholder="key (unique)" value={form.key} onChange={(e) => set({ key: e.target.value })} />
+          <input className="input w-44" placeholder="name" value={form.name} onChange={(e) => set({ name: e.target.value })} />
+          <input className="input w-40" placeholder="provider" value={form.provider} onChange={(e) => set({ provider: e.target.value })} />
+          <select className="input w-32" value={form.category} onChange={(e) => set({ category: e.target.value })}>
+            {GAME_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <select className="input w-36" value={form.status} onChange={(e) => set({ status: e.target.value })}>
+            <option value="LIVE">LIVE</option>
+            <option value="COMING_SOON">COMING_SOON</option>
+          </select>
+          <input className="input w-28" placeholder="rtp (0–1)" value={form.rtp} onChange={(e) => set({ rtp: e.target.value })} />
+          <input className="input w-24" placeholder="sort" value={form.sortOrder} onChange={(e) => set({ sortOrder: e.target.value })} />
+          <input className="input w-40" placeholder="route (/roulette)" value={form.route} onChange={(e) => set({ route: e.target.value })} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input className="input flex-1" placeholder="Описание (RU)" value={form.descriptionRu} onChange={(e) => set({ descriptionRu: e.target.value })} />
+          <input className="input flex-1" placeholder="Description (EN)" value={form.descriptionEn} onChange={(e) => set({ descriptionEn: e.target.value })} />
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-sm text-white/60">
+            <input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} /> enabled
+          </label>
+          <button onClick={save} className="btn-primary" disabled={!form.key}>Save</button>
+          {form.key && <button onClick={() => setForm(EMPTY_GAME)} className="btn-ghost text-sm">Clear</button>}
+        </div>
+      </div>
+
+      <Table
+        rows={data ?? []}
+        cols={['name', 'category', 'provider', 'rtp', 'status', 'enabled', '']}
+        render={(g: any) => [
+          <button key="e" onClick={() => setForm({ ...EMPTY_GAME, ...g, rtp: String(g.rtp), sortOrder: String(g.sortOrder ?? 0), route: g.route ?? '', descriptionRu: g.descriptionRu ?? '', descriptionEn: g.descriptionEn ?? '' })} className="text-lav hover:underline">{g.name}</button>,
+          g.category,
+          g.provider,
+          `${(g.rtp * 100).toFixed(2)}%`,
+          g.status,
+          <button key="t" onClick={() => toggle(g)} className={`chip ${g.enabled ? 'text-mint' : 'text-white/40'}`}>{g.enabled ? 'on' : 'off'}</button>,
+          <button key="d" onClick={() => del(g.key)} className="btn-ghost !px-2 !py-1 text-xs text-roul-red"><X size={13} /></button>,
+        ]}
+      />
+    </div>
+  );
+}
+
+function ChatAdmin() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['adm-chat'], queryFn: async () => (await api.get('/admin/chat?take=100')).data, refetchInterval: 10_000 });
+  const refresh = () => qc.invalidateQueries({ queryKey: ['adm-chat'] });
+  const run = async (fn: () => Promise<any>, ok: string) => {
+    try { await fn(); refresh(); toast.success(ok); } catch (e) { toast.error(apiError(e)); }
+  };
+  const isMuted = (m: any) => m.mutedUntil && new Date(m.mutedUntil) > new Date();
+
+  return (
+    <div className="card p-4">
+      <div className="mb-3 text-sm text-white/55">Лента чата (обновляется автоматически). Удаляйте сообщения и ограничивайте авторов.</div>
+      <div className="space-y-1.5">
+        {(data ?? []).map((m: any) => (
+          <div key={m.id} className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${m.deleted ? 'bg-roul-red/5 text-white/30' : 'bg-white/[0.03]'}`}>
+            <span className="w-32 shrink-0 truncate text-white/45">{m.username} <span className="text-white/25">#{m.accountId}</span></span>
+            <span className={`min-w-0 flex-1 truncate ${m.deleted ? 'line-through' : ''}`}>{m.body}</span>
+            {isMuted(m) && <span className="chip shrink-0 text-[10px] text-roul-red">muted</span>}
+            <span className="shrink-0 text-xs text-white/25">{new Date(m.createdAt).toLocaleTimeString()}</span>
+            <div className="flex shrink-0 gap-1">
+              {!m.deleted && (
+                <button onClick={() => run(() => api.delete(`/admin/chat/${m.id}`), 'Deleted')} className="btn-ghost !px-2 !py-1 text-xs text-roul-red" title="Delete message"><X size={13} /></button>
+              )}
+              {isMuted(m) ? (
+                <button onClick={() => run(() => api.post(`/admin/users/${m.userId}/mute`, { minutes: 0 }), 'Unmuted')} className="btn-ghost !px-2 !py-1 text-xs text-mint">Unmute</button>
+              ) : (
+                <button onClick={() => run(() => api.post(`/admin/users/${m.userId}/mute`, { minutes: 60 }), 'Muted 60m')} className="btn-ghost !px-2 !py-1 text-xs">Mute 60m</button>
+              )}
+            </div>
+          </div>
+        ))}
+        {(data ?? []).length === 0 && <div className="py-4 text-center text-white/40">—</div>}
+      </div>
+    </div>
+  );
+}
+
+function Roles() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['adm-perms'], queryFn: async () => (await api.get('/admin/permissions')).data });
+  const en = i18n.language?.startsWith('en');
+
+  const registry: any[] = data?.registry ?? [];
+  const managedRoles: string[] = data?.managedRoles ?? [];
+  const roleMap: Record<string, Record<string, boolean>> = {};
+  for (const r of data?.roles ?? []) roleMap[r.role] = r.permissions;
+
+  const groups = Array.from(new Set(registry.map((p) => p.group)));
+
+  const toggle = async (role: string, permission: string, allowed: boolean) => {
+    try {
+      await api.post('/admin/permissions', { role, permission, allowed });
+      qc.invalidateQueries({ queryKey: ['adm-perms'] });
+      qc.invalidateQueries({ queryKey: ['admin-me'] });
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="card p-4 text-sm text-white/55">
+        <Shield size={16} className="mr-1.5 inline text-lav" />
+        Включайте или выключайте отдельные действия для ролей. <b className="text-white/80">ADMIN</b> всегда имеет полный доступ. Назначайте роли пользователям во вкладке <b className="text-white/80">Users</b>.
+      </div>
+      <div className="card overflow-x-auto p-4">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-white/40">
+              <th className="pb-2 font-medium">Право / Permission</th>
+              <th className="pb-2 text-center font-medium text-white/30">ADMIN</th>
+              {managedRoles.map((r) => (
+                <th key={r} className="pb-2 text-center font-medium">{r}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <Fragment key={g}>
+                <tr>
+                  <td colSpan={2 + managedRoles.length} className="pt-3 pb-1 text-xs uppercase tracking-wide text-white/30">{g}</td>
+                </tr>
+                {registry.filter((p) => p.group === g).map((p) => (
+                  <tr key={p.key} className="border-t border-white/5">
+                    <td className="py-2 pr-3">
+                      <div>{en ? p.labelEn : p.labelRu}</div>
+                      <div className="text-xs text-white/30">{p.key}</div>
+                    </td>
+                    <td className="py-2 text-center">
+                      <input type="checkbox" checked readOnly disabled className="opacity-40" />
+                    </td>
+                    {managedRoles.map((role) => (
+                      <td key={role} className="py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!roleMap[role]?.[p.key]}
+                          onChange={(e) => toggle(role, p.key, e.target.checked)}
+                          className="h-4 w-4 cursor-pointer accent-lav"
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function Table({ rows, cols, render }: { rows: any[]; cols: string[]; render: (r: any) => any[] }) {
